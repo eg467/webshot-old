@@ -1,259 +1,321 @@
-﻿using OpenQA.Selenium;
-using OpenQA.Selenium.Chrome;
+﻿using Newtonsoft.Json;
 using OpenQA.Selenium.Support.Extensions;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
-using System.Data;
-using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
-using System.Net;
+using System.Reflection;
+using System.Security.Cryptography;
 using System.Security.Policy;
 using System.Text;
-using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using static Webshot.Spider;
 
 namespace Webshot
 {
+    public enum Device
+    {
+        Mobile, Tablet, Desktop
+    }
+
     public partial class Form1 : Form
     {
+        private const string ManifestFilename = "manifest.json";
+
+        private CancellationTokenSource _cancellationTokenSource;
+
+        public CancellationTokenSource CancellationTokenSource
+        {
+            get => _cancellationTokenSource;
+            set
+            {
+                if (value != null && _cancellationTokenSource != null)
+                {
+                    throw new InvalidOperationException("The cancellation token is already set. Set it to null before using another.");
+                }
+                _cancellationTokenSource = value;
+                TaskInProgress = _cancellationTokenSource != null;
+            }
+        }
+
+        public bool TaskInProgress
+        {
+            get => this.btnCancel.Enabled;
+            set
+            {
+                this.btnCancel.Enabled = value;
+                this.pnlCrawl.Enabled = !value;
+                this.pnlOptions.Enabled = !value;
+                this.pnlSelectedPages.Enabled = !value;
+
+                if (!value)
+                {
+                    this.progressBar.Value = 0;
+                    this.progressBar.Maximum = 0;
+                    this.lblStatus.Text = "";
+                }
+            }
+        }
+
         public Form1()
         {
             InitializeComponent();
         }
 
-        private readonly Dictionary<int, string> _sizes = new Dictionary<int, string>()
+        // TODO: Make dynamic as options
+        /// <summary>
+        /// The device widths and descriptions/subdirectories for those device screenshots.
+        /// </summary>
+        private readonly Dictionary<Device, int> _devices = new Dictionary<Device, int>()
         {
-            [480] = "mobile",
-            [720] = "tablet",
-            [1920] = "desktop"
+            [Device.Mobile] = 480,
+            [Device.Tablet] = 720,
+            [Device.Desktop] = 1920,
         };
 
         private void Form1_Load(object sender, EventArgs e)
         {
-            using (var ss = new Screenshotter())
+            this.txtBaseUrl.Text = Properties.Settings.Default.BaseUrl ?? "";
+            this.txtOutputDir.Text = Properties.Settings.Default.OutputDir ?? "";
+        }
+
+        private Settings GetSettings()
+        {
+            var settings = new Settings
             {
-                var outputDir = "screenshots";
-                var urls = new Spider("https://example.com").Crawl();
-                foreach (var url in urls)
-                {
-                    foreach (var size in _sizes)
-                    {
-                        var width = size.Key;
-                        var deviceDir = size.Value;
-                        var filename = Screenshotter.SanitizeFilename(url.ToString());
-                        var path = Path.Combine(outputDir, deviceDir, filename);
-                        ss.TakeScreenshot(url.ToString(), path, width);
-                    }
-                }
-            }
-            MessageBox.Show("Done");
+                RootUri = this.txtBaseUrl.Text,
+                OutputDir = this.txtOutputDir.Text,
+                CrawlExternalSites = this.cbCrawlExternalLinks.Checked,
+                Devices = this._devices,
+                Uris = this.txtSelectedPages.Text.Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries)
+            };
+            return settings;
         }
 
-        private void TakeDeviceScreenshots(string url)
+        private void LoadSettings(Settings settings)
         {
-        }
-    }
+            this.txtBaseUrl.Text = settings.RootUri;
+            this.txtOutputDir.Text = settings.OutputDir;
+            this.cbCrawlExternalLinks.Checked = settings.CrawlExternalSites;
 
-    public enum VisitationStatus
-    {
-        Visited, Unvisited, Excluded
-    }
-
-    public sealed class Spider
-    {
-        public Uri RootUri { get; }
-        private readonly bool _followExternalLinks;
-        private readonly Dictionary<Uri, VisitationStatus> _uris = new Dictionary<Uri, VisitationStatus>();
-
-        private IEnumerable<Uri> VisitedUrls => _uris
-                .Where(x => x.Value == VisitationStatus.Visited)
-                .Select(x => x.Key)
-                .OrderBy(x => x);
-
-        public Spider(string rootUri, bool followExternalLinks = false) : this(new Uri(rootUri), followExternalLinks)
-        {
-        }
-
-        public Spider(Uri rootUri, bool followExternalLinks = false)
-        {
-            this.RootUri = rootUri;
-            this._followExternalLinks = followExternalLinks;
-        }
-
-        public IEnumerable<Uri> Crawl()
-        {
-            _uris.Clear();
-            FoundLink(RootUri);
-
-            while (TryNextUnvisited(out Uri unvisited))
+            _devices.Clear();
+            foreach (var x in settings.Devices)
             {
-                Visit(unvisited);
+                _devices[x.Key] = x.Value;
             }
 
-            return VisitedUrls;
+            this.txtSelectedPages.Text = string.Join(Environment.NewLine, settings.Uris);
         }
 
-        private void Visit(Uri uri)
+        private void btnChooseOutput_Click(object sender, EventArgs e)
         {
-            _uris[uri] = VisitationStatus.Visited;
-
-            using (var client = new WebClient())
+            if (DialogResult.OK != folderBrowserDialog1.ShowDialog())
             {
-                try
-                {
-                    var html = client.DownloadString(uri);
-                    if (html.IndexOf("<html", StringComparison.OrdinalIgnoreCase) == -1)
-                    {
-                        Exclude(uri);
-                        return;
-                    }
-
-                    Regex.Matches(html, @"<a[^>]+href=""([^""]+)""", RegexOptions.IgnoreCase)
-                        .Cast<Match>()
-                        .Select(h => CreateUri(h.Groups[1].Value))
-                        .ToList()
-                        .ForEach(FoundLink);
-                }
-                catch (WebException e)
-                {
-                    Debug.WriteLine($"Error downloading page ({uri}): {e.Message}");
-                    Exclude(uri);
-                }
+                return;
             }
+            this.txtOutputDir.Text = folderBrowserDialog1.SelectedPath;
         }
 
-        private bool ShouldVisit(Uri uri)
+        private void btnExport_Click(object sender, EventArgs e)
         {
-            try
+            if (DialogResult.OK != this.saveFileDialog1.ShowDialog())
             {
-                return MatchesHost(uri) && !PermittedUriPattern(uri);
+                return;
             }
-            catch (UriFormatException e)
+
+            var settings = GetSettings();
+            var serializedSettings = JsonConvert.SerializeObject(settings);
+            File.WriteAllText(
+                this.saveFileDialog1.FileName,
+                serializedSettings);
+        }
+
+        private void btnImport_Click(object sender, EventArgs e)
+        {
+            if (DialogResult.OK != this.openFileDialog1.ShowDialog())
             {
-                Debug.WriteLine($"Error parsing URI ({uri}): {e.Message}");
-                return false;
+                return;
             }
-        }
 
-        private bool MatchesHost(Uri uri) =>
-            !uri.IsAbsoluteUri
-            || _followExternalLinks
-            || string.Equals(uri.Host, RootUri.Host, StringComparison.OrdinalIgnoreCase);
-
-        private bool PermittedUriPattern(Uri uri) =>
-            !Regex.IsMatch(uri.ToString(), @"(\.(css|png)$)");
-
-        private bool TryNextUnvisited(out Uri uri)
-        {
-            uri = _uris
-                .Where(x => x.Value == VisitationStatus.Unvisited)
-                .Select(x => x.Key)
-                .FirstOrDefault();
-            return uri != null;
-        }
-
-        private Uri CreateUri(string uri) => new Uri(RootUri, uri);
-
-        private void FoundLink(Uri uri)
-        {
-            if (!ShouldVisit(uri))
+            if (!File.Exists(this.openFileDialog1.FileName))
             {
-                Exclude(uri);
+                MessageBox.Show("The settings file doesn't exist.");
+                return;
             }
-            else if (!_uris.ContainsKey(uri))
+
+            var serializedSettings = File.ReadAllText(this.openFileDialog1.FileName);
+            var settings = JsonConvert.DeserializeObject<Settings>(serializedSettings);
+            LoadSettings(settings);
+        }
+
+        private void btnStartCrawl_Click(object sender, EventArgs e)
+        {
+            var uri = this.txtBaseUrl.Text;
+            if (uri.Length == 0)
             {
-                _uris[uri] = VisitationStatus.Unvisited;
+                MessageBox.Show("Please enter a root URL.");
+                return;
             }
-        }
 
-        private void Exclude(Uri uri)
-        {
-            _uris[uri] = VisitationStatus.Excluded;
-        }
-    }
+            this.pnlCrawl.Enabled = false;
+            Properties.Settings.Default.BaseUrl = uri;
+            Properties.Settings.Default.Save();
 
-    public sealed class Screenshotter : IDisposable
-    {
-        private readonly ChromeDriver _driver;
+            var spider = new Spider(uri, this.cbCrawlExternalLinks.Checked);
 
-        public Screenshotter()
-        {
-            _driver = CreateDriver();
-        }
-
-        public void Dispose()
-        {
-            _driver?.Dispose();
-        }
-
-        private ChromeDriver CreateDriver()
-        {
-            var driver = new ChromeDriver();
-            return driver;
-        }
-
-        public static string SanitizeFilename(string filename)
-        {
-            var sanitized = System.Text.RegularExpressions.Regex.Replace(filename, "[^a-zA-Z0-9]+", "_");
-            sanitized = System.Text.RegularExpressions.Regex.Replace(sanitized, "__+", "_");
-            return sanitized;
-        }
-
-        // Adapted from https://stackoverflow.com/a/56535317
-        public string TakeScreenshot(string url, string filePath, int? width = null)
-        {
-            if (!filePath.EndsWith(".png", StringComparison.OrdinalIgnoreCase))
+            CrawlResults pages = null;
+            IProgress<ParsingProgress> progress = new Progress<ParsingProgress>(p =>
             {
-                filePath += ".png";
-            }
-            string outputDir = Path.GetDirectoryName(filePath);
-            if (!Directory.Exists(outputDir))
-                Directory.CreateDirectory(outputDir);
-
-            return TakeDriverScreenshot(url, filePath, width);
-        }
-
-        public string TakeScreenshot(string url, int? width = null)
-        {
-            var filePath = GetFilePathFromUri(url);
-            return TakeScreenshot(url, filePath, width);
+                this.progressBar.Maximum = p.Count;
+                this.progressBar.Value = p.CurrentIndex + 1;
+                this.lblStatus.Text = p.CurrentItem;
+            });
+            CancellableAction(token =>
+            {
+                pages = spider.Crawl(token, progress);
+            });
+            SelectPages(pages);
+            this.pnlCrawl.Enabled = true;
         }
 
         /// <summary>
-        /// Saves a screenshot from a URL. Adapted from https://stackoverflow.com/a/56535317.
+        /// Performs an action that can be cancelled.
         /// </summary>
-        /// <param name="url"></param>
-        /// <param name="filePath"></param>
-        /// <param name="width"></param>
-        /// <returns></returns>
-        private string TakeDriverScreenshot(string url, string filePath, int? width = null)
+        /// <remarks>Not thread safe.</remarks>
+        /// <param name="fn"></param>
+        private void CancellableAction(Action<CancellationToken> fn)
         {
-            _driver.Navigate().GoToUrl(url);
-            const string autoWidth = "return Math.max(window.innerWidth,document.body.scrollWidth,document.documentElement.scrollWidth)";
-            var calculatedWidth = width.HasValue ? $"return {width}" : autoWidth;
-
-            Dictionary<string, Object> metrics = new Dictionary<string, Object>
+            using (CancellationTokenSource = new CancellationTokenSource())
             {
-                ["width"] = _driver.ExecuteScript(calculatedWidth),
-                ["height"] = _driver.ExecuteScript("return Math.max(window.innerHeight,document.body.scrollHeight,document.documentElement.scrollHeight)"),
-                ["deviceScaleFactor"] = (double)_driver.ExecuteScript("return window.devicePixelRatio"),
-                ["mobile"] = _driver.ExecuteScript("return typeof window.orientation !== 'undefined'")
-            };
-            _driver.ExecuteChromeCommand("Emulation.setDeviceMetricsOverride", metrics);
-            _driver.GetScreenshot().SaveAsFile(filePath, ScreenshotImageFormat.Png);
-            _driver.ExecuteChromeCommand("Emulation.clearDeviceMetricsOverride", new Dictionary<string, Object>());
-            return filePath;
+                fn(CancellationTokenSource.Token);
+            }
+            CancellationTokenSource = null;
         }
 
-        private static string GetFilePathFromUri(string websiteUri)
+        private void SelectPages(CrawlResults pages)
         {
-            var uri = new Uri(websiteUri);
-            return SanitizeFilename($"{uri.Host}{uri.PathAndQuery}");
+            var frm = new ChoosePagesForm(pages.VisitedUrls);
+            if (DialogResult.OK != frm.ShowDialog(this))
+            {
+                return;
+            }
+            this.txtSelectedPages.Text = string.Join(Environment.NewLine, frm.IncludedPages);
         }
+
+        private void btnStartScreenshots_Click(object sender, EventArgs e)
+        {
+            var outputDir = this.txtOutputDir.Text;
+            var manifestPath = Path.Combine(outputDir, ManifestFilename);
+
+            if (string.IsNullOrWhiteSpace(outputDir))
+            {
+                outputDir = Path.GetDirectoryName(typeof(Form1).Assembly.Location);
+            }
+
+            if (File.Exists(manifestPath)
+                && DialogResult.OK != MessageBox.Show(
+                "This directory already has results, overwrite them?",
+                "Overwrite?",
+                MessageBoxButtons.OKCancel,
+                MessageBoxIcon.Warning,
+                MessageBoxDefaultButton.Button2))
+            {
+                return;
+            }
+
+            if (!Directory.Exists(outputDir))
+            {
+                Directory.CreateDirectory(outputDir);
+            }
+
+            Properties.Settings.Default.OutputDir = outputDir;
+            Properties.Settings.Default.Save();
+
+            TakeScreenshots(outputDir, manifestPath);
+            LoadResults(manifestPath);
+        }
+
+        private void LoadResults(string manifestFile)
+        {
+            var frm = new ViewResultsForm(manifestFile);
+            frm.ShowDialog();
+        }
+
+        private List<ScreenshotResult> TakeScreenshots(string outputDir, string manifestPath)
+        {
+            var results = new List<ScreenshotResult>();
+            using (var ss = new Screenshotter())
+            {
+                var uris = this.txtSelectedPages.Text
+                    .Split(new[] { "\r\n" }, StringSplitOptions.RemoveEmptyEntries)
+                    .Select(u => new Uri(u));
+
+                foreach (var url in uris)
+                {
+                    var result = new ScreenshotResult()
+                    {
+                        Uri = url.ToString()
+                    };
+
+                    foreach (var size in _devices)
+                    {
+                        var device = size.Key;
+                        var width = size.Value;
+                        var filenameUriComponent = Screenshotter.SanitizeFilename(url.ToString());
+                        var filename = $"{filenameUriComponent}.{device}.png";
+                        var relPath = Path.Combine("images", filename);
+                        result.Paths.Add(device, relPath);
+                        var path = Path.Combine(outputDir, relPath);
+
+                        try
+                        {
+                            ss.TakeScreenshot(url.ToString(), path, width);
+                        }
+                        catch (Exception ex)
+                        {
+                            result.Error += ex.Message + Environment.NewLine;
+                        }
+                    }
+                    results.Add(result);
+                }
+            }
+
+            var serializedResults = JsonConvert.SerializeObject(results);
+            File.WriteAllText(manifestPath, serializedResults);
+            return results;
+        }
+
+        private void btnViewResults_Click(object sender, EventArgs e)
+        {
+            if (Directory.Exists(this.txtOutputDir.Text))
+            {
+                this.openManifestDialog.InitialDirectory = this.txtOutputDir.Text;
+            }
+
+            if (DialogResult.OK == this.openManifestDialog.ShowDialog()
+                && File.Exists(this.openManifestDialog.FileName))
+            {
+                LoadResults(this.openManifestDialog.FileName);
+            }
+        }
+
+        private void btnCancel_Click(object sender, EventArgs e)
+        {
+            _cancellationTokenSource.Cancel();
+            _cancellationTokenSource = null;
+        }
+    }
+
+    public class ScreenshotResult
+    {
+        public string Uri { get; set; }
+        public Dictionary<Device, string> Paths { get; set; } = new Dictionary<Device, string>();
+
+        public string Error { get; set; }
     }
 }
