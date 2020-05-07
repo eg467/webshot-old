@@ -207,7 +207,7 @@ namespace Webshot
             this.txtSelectedPages.Text = string.Join(Environment.NewLine, frm.IncludedPages);
         }
 
-        private void btnStartScreenshots_Click(object sender, EventArgs e)
+        private async void btnStartScreenshots_Click(object sender, EventArgs e)
         {
             var outputDir = this.txtOutputDir.Text;
             var manifestPath = Path.Combine(outputDir, ManifestFilename);
@@ -228,15 +228,11 @@ namespace Webshot
                 return;
             }
 
-            if (!Directory.Exists(outputDir))
-            {
-                Directory.CreateDirectory(outputDir);
-            }
-
+            Directory.CreateDirectory(outputDir);
             Properties.Settings.Default.OutputDir = outputDir;
             Properties.Settings.Default.Save();
 
-            TakeScreenshots(outputDir, manifestPath);
+            await TakeScreenshots(outputDir, manifestPath);
             LoadResults(manifestPath);
         }
 
@@ -246,7 +242,7 @@ namespace Webshot
             frm.ShowDialog();
         }
 
-        private List<ScreenshotResult> TakeScreenshots(string outputDir, string manifestPath)
+        private async Task<List<ScreenshotResult>> TakeScreenshots(string outputDir, string manifestPath)
         {
             var results = new List<ScreenshotResult>();
             using (var ss = new Screenshotter())
@@ -274,7 +270,7 @@ namespace Webshot
 
                         try
                         {
-                            ss.TakeScreenshot(url.ToString(), path, width);
+                            await ss.TakeScreenshot(url.ToString(), path, width);
                         }
                         catch (Exception ex)
                         {

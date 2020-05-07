@@ -2,13 +2,17 @@
 using OpenQA.Selenium.Chrome;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Webshot
 {
     public sealed class Screenshotter : IDisposable
     {
         private readonly ChromeDriver _driver;
+        private const int ScreenshotDelayMs = 250;
 
         public Screenshotter()
         {
@@ -34,7 +38,7 @@ namespace Webshot
         }
 
         // Adapted from https://stackoverflow.com/a/56535317
-        public string TakeScreenshot(string url, string filePath, int? width = null)
+        public async Task<string> TakeScreenshot(string url, string filePath, int? width = null)
         {
             if (!filePath.EndsWith(".png", StringComparison.OrdinalIgnoreCase))
             {
@@ -44,13 +48,15 @@ namespace Webshot
             if (!Directory.Exists(outputDir))
                 Directory.CreateDirectory(outputDir);
 
-            return TakeDriverScreenshot(url, filePath, width);
+            _driver.Navigate().GoToUrl(url);
+
+            return await TakeDriverScreenshot(filePath, width);
         }
 
-        public string TakeScreenshot(string url, int? width = null)
+        public async Task<string> TakeScreenshot(string url, int? width = null)
         {
             var filePath = GetFilePathFromUri(url);
-            return TakeScreenshot(url, filePath, width);
+            return await TakeScreenshot(url, filePath, width);
         }
 
         /// <summary>
@@ -60,23 +66,57 @@ namespace Webshot
         /// <param name="filePath"></param>
         /// <param name="width"></param>
         /// <returns></returns>
-        private string TakeDriverScreenshot(string url, string filePath, int? width = null)
+        private async Task<string> TakeDriverScreenshot(string filePath, int? width = null)
         {
-            _driver.Navigate().GoToUrl(url);
-            const string autoWidth = "return Math.max(window.innerWidth,document.body.scrollWidth,document.documentElement.scrollWidth)";
-            var calculatedWidth = width.HasValue ? $"return {width}" : autoWidth;
-
-            Dictionary<string, Object> metrics = new Dictionary<string, Object>
-            {
-                ["width"] = _driver.ExecuteScript(calculatedWidth),
-                ["height"] = _driver.ExecuteScript("return Math.max(window.innerHeight,document.body.scrollHeight,document.documentElement.scrollHeight)"),
-                ["deviceScaleFactor"] = (double)_driver.ExecuteScript("return window.devicePixelRatio"),
-                ["mobile"] = _driver.ExecuteScript("return typeof window.orientation !== 'undefined'")
-            };
-            _driver.ExecuteChromeCommand("Emulation.setDeviceMetricsOverride", metrics);
+            ResizeWindow(width);
             _driver.GetScreenshot().SaveAsFile(filePath, ScreenshotImageFormat.Png);
-            _driver.ExecuteChromeCommand("Emulation.clearDeviceMetricsOverride", new Dictionary<string, Object>());
+            ClearResize();
+
+            // Dummy async for now
+            await Task.CompletedTask;
+
             return filePath;
+        }
+
+        /// <summary>
+        /// Repeatedly resize the window to account for lazily loaded elements.
+        /// </summary>
+        /// <param name="width"></param>
+        private void ResizeWindow(int? width)
+        {
+            int numTries = 0;
+            const int maxTries = 5;
+            int prevHeight;
+            int calculatedHeight = -1;
+            int CalculateHeight()
+            {
+                // Sometimes a long, sometimes double, etc
+                object result = _driver.ExecuteScript("return Math.max(document.body.scrollHeight,document.body.offsetHeight,document.documentElement.clientHeight, document.documentElement.scrollHeight,document.documentElement.offsetHeight,document.documentElement.getBoundingClientRect().height)");
+                return Convert.ToInt32(result) + 1;
+            }
+
+            do
+            {
+                prevHeight = calculatedHeight;
+                const string autoWidth = "return Math.max(window.innerWidth,document.body.scrollWidth,document.documentElement.scrollWidth)";
+                var calculatedWidth = width.HasValue ? $"return {width}" : autoWidth;
+                calculatedHeight = CalculateHeight();
+                Debug.WriteLine($"Height for width ({width}) at {calculatedHeight}");
+                Dictionary<string, Object> metrics = new Dictionary<string, Object>
+                {
+                    ["width"] = _driver.ExecuteScript(calculatedWidth),
+                    ["height"] = calculatedHeight,
+                    //["height"] = _driver.ExecuteScript("return 5000"),
+                    ["deviceScaleFactor"] = (double)_driver.ExecuteScript("return window.devicePixelRatio"),
+                    ["mobile"] = _driver.ExecuteScript("return typeof window.orientation !== 'undefined'")
+                };
+                _driver.ExecuteChromeCommand("Emulation.setDeviceMetricsOverride", metrics);
+            } while (calculatedHeight != prevHeight && ++numTries < maxTries);
+        }
+
+        private void ClearResize()
+        {
+            _driver.ExecuteChromeCommand("Emulation.clearDeviceMetricsOverride", new Dictionary<string, Object>());
         }
 
         private static string GetFilePathFromUri(string websiteUri)
