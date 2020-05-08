@@ -46,5 +46,41 @@ namespace Webshot.Properties {
                 this["BaseUrl"] = value;
             }
         }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("1920")]
+        public int DesktopWidth {
+            get {
+                return ((int)(this["DesktopWidth"]));
+            }
+            set {
+                this["DesktopWidth"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("480")]
+        public int MobileWidth {
+            get {
+                return ((int)(this["MobileWidth"]));
+            }
+            set {
+                this["MobileWidth"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("768")]
+        public int TabletWidth {
+            get {
+                return ((int)(this["TabletWidth"]));
+            }
+            set {
+                this["TabletWidth"] = value;
+            }
+        }
     }
 }

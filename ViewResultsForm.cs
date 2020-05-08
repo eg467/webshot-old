@@ -10,6 +10,7 @@ using System.IO;
 using System.Linq;
 using System.Security;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
@@ -36,19 +37,24 @@ namespace Webshot
             set
             {
                 _selectedImage = value;
+
+                this.pictureBox1.Top = 0;
+                this.pictureBox1.Left = 0;
+
+                var path = _selectedImage?.GetPath(OutputDirectory);
+
+                if (_selectedImage != null && !File.Exists(path))
+                {
+                    MessageBox.Show("The selected image file doesn't exist.");
+                    _selectedImage = null;
+                }
+
                 if (_selectedImage != null)
                 {
-                    var path = _selectedImage.GetPath(OutputDirectory);
-                    if (File.Exists(path))
-                    {
-                        this.lnkUrl.Text = _selectedImage.Result.Uri;
-                        this.pictureBox1.Image = Image.FromFile(path);
-                        this.btnShowInExplorer.Enabled = true;
-                    }
-                    else
-                    {
-                        MessageBox.Show("The selected image file doesn't exist.");
-                    }
+                    this.lnkUrl.Text = _selectedImage.Result.Uri;
+                    this.pictureBox1.Image = Image.FromFile(path);
+                    this.btnShowInExplorer.Enabled = true;
+                    ApplyImageZoom(this.trackZoom.Value);
                 }
                 else
                 {
@@ -61,6 +67,9 @@ namespace Webshot
         }
 
         private List<ScreenshotResult> _results;
+        private readonly string _mostCommonHost;
+
+        private Point MouseDownLocation;
 
         public ViewResultsForm()
         {
@@ -79,12 +88,30 @@ namespace Webshot
 
             var serializedResults = File.ReadAllText(ManifestPath);
             _results = JsonConvert.DeserializeObject<List<ScreenshotResult>>(serializedResults);
+
+            // Hide the most common host to avoid visual clutter
+            _mostCommonHost = _results.GroupBy(x => new Uri(x.Uri).Host)
+                .Select(x => new { x.Key, Count = x.Count() })
+                .OrderByDescending(x => x.Count)
+                .Select(x => x.Key)
+                .FirstOrDefault() ?? "";
+        }
+
+        private string RemoveCommonHost(string link)
+        {
+            var uri = new Uri(link);
+            var host = uri.Host;
+            return string.Equals(host, _mostCommonHost, StringComparison.OrdinalIgnoreCase)
+                ? uri.PathAndQuery : link;
+            //Regex.Replace(link, $@"https?://{_mostCommonHost}", "", RegexOptions.IgnoreCase);
         }
 
         private void ViewResults_Load(object sender, EventArgs e)
         {
             AddByUriNode();
             AddByDeviceNode();
+            this.treeFiles.ExpandAll();
+            this.trackZoom.Value = 100;
         }
 
         private void AddByUriNode()
@@ -106,7 +133,11 @@ namespace Webshot
                     .Cast<TreeNode>()
                     .ToArray();
 
-                var node = new TreeNode(r.Uri, childrenNodes);
+                var node = new TreeNode(RemoveCommonHost(r.Uri), childrenNodes)
+                {
+                    ToolTipText = r.Uri,
+                    NodeFont = new Font(this.treeFiles.Font, FontStyle.Bold)
+                };
 
                 rootNode.Nodes.Add(node);
             });
@@ -126,13 +157,15 @@ namespace Webshot
 
                     var pageNodes = _results
                         .Where(r => r.Paths.ContainsKey(device))
-                        .Select(r => new TreeNode(r.Uri)
+                        .Select(r => new TreeNode(RemoveCommonHost(r.Uri))
                         {
                             Tag = new ScreenshotFile
                             {
                                 Device = device,
                                 Result = r
-                            }
+                            },
+                            ToolTipText = r.Uri,
+                            NodeFont = new Font(this.treeFiles.Font, FontStyle.Bold)
                         }).ToArray();
 
                     deviceNode.Nodes.AddRange(pageNodes);
@@ -145,11 +178,6 @@ namespace Webshot
             SelectedImage = e.Node.Tag as ScreenshotFile;
         }
 
-        private void LnkUrl_Click(object sender, EventArgs e)
-        {
-            throw new NotImplementedException();
-        }
-
         private void lnkUrl_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
         {
             var uri = this.lnkUrl.Text;
@@ -157,7 +185,7 @@ namespace Webshot
             {
                 return;
             }
-            System.Diagnostics.Process.Start(uri);
+            Process.Start(uri);
         }
 
         private void btnShowInExplorer_Click(object sender, EventArgs e)
@@ -178,6 +206,65 @@ namespace Webshot
                 Arguments = args
             };
             Process.Start(info);
+        }
+
+        private void pictureBox1_MouseDown(object sender, MouseEventArgs e)
+        {
+            if (e.Button == MouseButtons.Left)
+            {
+                Cursor = Cursors.NoMove2D;
+                MouseDownLocation = e.Location;
+            }
+        }
+
+        private void pictureBox1_MouseMove(object sender, MouseEventArgs e)
+        {
+            if (this.pictureBox1.Image != null && e.Button == MouseButtons.Left)
+            {
+                // Where the image would be w/o any constraints
+                var rawLocation = new Point(
+                    e.X + this.pictureBox1.Left - MouseDownLocation.X,
+                    e.Y + this.pictureBox1.Top - MouseDownLocation.Y);
+
+                // Constrain image movement so it's always visible.
+                var imgSize = this.pictureBox1.ClientSize;
+                var containerSize = this.pnlPicture.ClientSize;
+                var xRange = Math.Max(0, imgSize.Width - containerSize.Width);
+                var yRange = Math.Max(0, imgSize.Height - containerSize.Height);
+
+                this.pictureBox1.Left = InRange(rawLocation.X, -xRange, 0);
+                this.pictureBox1.Top = InRange(rawLocation.Y, -yRange, 0);
+            }
+        }
+
+        private int InRange(int value, int min, int max) =>
+            Math.Min(max, Math.Max(min, value));
+
+        private void pictureBox1_MouseUp(object sender, MouseEventArgs e)
+        {
+            Cursor = Cursors.Default;
+        }
+
+        private void ApplyImageZoom(int value)
+        {
+            this.lblZoom.Text = $"Zoom ({value}%):";
+            if (this.pictureBox1.Image == null)
+            {
+                return;
+            }
+            double factor = value / 100.0;
+            var imgSize = this.pictureBox1.Image.Size;
+
+            var scaledSize = new Size(
+                (int)Math.Round(factor * imgSize.Width),
+                (int)Math.Round(factor * imgSize.Height));
+            this.pictureBox1.Location = new Point(0, 0);
+            this.pictureBox1.Size = scaledSize;
+        }
+
+        private void trackZoom_Scroll(object sender, EventArgs e)
+        {
+            ApplyImageZoom(this.trackZoom.Value);
         }
     }
 }

@@ -1,16 +1,8 @@
 ﻿using Newtonsoft.Json;
-using OpenQA.Selenium.Support.Extensions;
 using System;
 using System.Collections.Generic;
-using System.ComponentModel;
-using System.Drawing;
-using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
-using System.Reflection;
-using System.Security.Cryptography;
-using System.Security.Policy;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -71,17 +63,59 @@ namespace Webshot
         /// <summary>
         /// The device widths and descriptions/subdirectories for those device screenshots.
         /// </summary>
-        private readonly Dictionary<Device, int> _devices = new Dictionary<Device, int>()
+        private Dictionary<Device, int> _devices = null;
+
+        private Dictionary<Device, int> Devices
         {
-            [Device.Mobile] = 480,
-            [Device.Tablet] = 720,
-            [Device.Desktop] = 1920,
-        };
+            get
+            {
+                _devices = _devices ?? new Dictionary<Device, int>()
+                {
+                    [Device.Desktop] = Properties.Settings.Default.DesktopWidth,
+                    [Device.Mobile] = Properties.Settings.Default.MobileWidth,
+                    [Device.Tablet] = Properties.Settings.Default.TabletWidth,
+                };
+                return _devices;
+            }
+            set
+            {
+                _devices = value;
+                Properties.Settings.Default.DesktopWidth = _devices[Device.Desktop];
+                Properties.Settings.Default.MobileWidth = _devices[Device.Mobile];
+                Properties.Settings.Default.TabletWidth = _devices[Device.Tablet];
+                Properties.Settings.Default.Save();
+            }
+        }
 
         private void Form1_Load(object sender, EventArgs e)
         {
             this.txtBaseUrl.Text = Properties.Settings.Default.BaseUrl ?? "";
             this.txtOutputDir.Text = Properties.Settings.Default.OutputDir ?? "";
+            RefreshDeviceControls();
+        }
+
+        private void SetDeviceWidths()
+        {
+            Devices = new Dictionary<Device, int>()
+            {
+                [Device.Desktop] = (int)this.numDesktopWidth.Value,
+                [Device.Mobile] = (int)this.numMobileWidth.Value,
+                [Device.Tablet] = (int)this.numTabletWidth.Value
+            };
+        }
+
+        private void SetDeviceWidth(Device device, int width)
+        {
+            Devices[device] = width;
+            // Triggers a setting save in property setter..
+            Devices = Devices;
+        }
+
+        private void RefreshDeviceControls()
+        {
+            this.numDesktopWidth.Value = Devices.ContainsKey(Device.Desktop) ? Devices[Device.Desktop] : 0;
+            this.numMobileWidth.Value = Devices.ContainsKey(Device.Mobile) ? Devices[Device.Mobile] : 0;
+            this.numTabletWidth.Value = Devices.ContainsKey(Device.Tablet) ? Devices[Device.Tablet] : 0;
         }
 
         private Settings GetSettings()
@@ -91,7 +125,7 @@ namespace Webshot
                 RootUri = this.txtBaseUrl.Text,
                 OutputDir = this.txtOutputDir.Text,
                 CrawlExternalSites = this.cbCrawlExternalLinks.Checked,
-                Devices = this._devices,
+                Devices = this.Devices,
                 Uris = this.txtSelectedPages.Text.Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries)
             };
             return settings;
@@ -102,13 +136,8 @@ namespace Webshot
             this.txtBaseUrl.Text = settings.RootUri;
             this.txtOutputDir.Text = settings.OutputDir;
             this.cbCrawlExternalLinks.Checked = settings.CrawlExternalSites;
-
-            _devices.Clear();
-            foreach (var x in settings.Devices)
-            {
-                _devices[x.Key] = x.Value;
-            }
-
+            Devices = settings.Devices;
+            RefreshDeviceControls();
             this.txtSelectedPages.Text = string.Join(Environment.NewLine, settings.Uris);
         }
 
@@ -123,7 +152,11 @@ namespace Webshot
 
         private void btnExport_Click(object sender, EventArgs e)
         {
-            if (DialogResult.OK != this.saveFileDialog1.ShowDialog())
+            if (Directory.Exists(this.txtOutputDir.Text))
+            {
+                this.saveSettingsDialog.InitialDirectory = this.txtOutputDir.Text;
+            }
+            if (DialogResult.OK != this.saveSettingsDialog.ShowDialog())
             {
                 return;
             }
@@ -131,7 +164,7 @@ namespace Webshot
             var settings = GetSettings();
             var serializedSettings = JsonConvert.SerializeObject(settings);
             File.WriteAllText(
-                this.saveFileDialog1.FileName,
+                this.saveSettingsDialog.FileName,
                 serializedSettings);
         }
 
@@ -258,7 +291,7 @@ namespace Webshot
                         Uri = url.ToString()
                     };
 
-                    foreach (var size in _devices)
+                    foreach (var size in _devices.Where(d => d.Value > 0))
                     {
                         var device = size.Key;
                         var width = size.Value;
@@ -302,16 +335,16 @@ namespace Webshot
 
         private void btnCancel_Click(object sender, EventArgs e)
         {
-            _cancellationTokenSource.Cancel();
-            _cancellationTokenSource = null;
+            CancellationTokenSource?.Cancel();
+            CancellationTokenSource = null;
         }
-    }
 
-    public class ScreenshotResult
-    {
-        public string Uri { get; set; }
-        public Dictionary<Device, string> Paths { get; set; } = new Dictionary<Device, string>();
-
-        public string Error { get; set; }
+        private void DeviceWidth_Changed(object sender, EventArgs e)
+        {
+            NumericUpDown widthControl = (NumericUpDown)sender;
+            var deviceName = (string)widthControl.Tag;
+            var device = (Device)Enum.Parse(typeof(Device), deviceName);
+            SetDeviceWidth(device, (int)widthControl.Value);
+        }
     }
 }

@@ -71,15 +71,16 @@
     </Compile>
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="ScreenshotResult.cs" />
     <Compile Include="Screenshotter.cs" />
     <Compile Include="Settings.cs" />
     <Compile Include="Spider.cs" />
     <Compile Include="Utils.cs" />
-    <Compile Include="ViewResults.cs">
+    <Compile Include="ViewResultsForm.cs">
       <SubType>Form</SubType>
     </Compile>
-    <Compile Include="ViewResults.Designer.cs">
-      <DependentUpon>ViewResults.cs</DependentUpon>
+    <Compile Include="ViewResultsForm.Designer.cs">
+      <DependentUpon>ViewResultsForm.cs</DependentUpon>
     </Compile>
     <Compile Include="VisitationStatus.cs" />
     <EmbeddedResource Include="ChoosePagesForm.resx">
@@ -97,8 +98,8 @@
       <AutoGen>True</AutoGen>
       <DependentUpon>Resources.resx</DependentUpon>
     </Compile>
-    <EmbeddedResource Include="ViewResults.resx">
-      <DependentUpon>ViewResults.cs</DependentUpon>
+    <EmbeddedResource Include="ViewResultsForm.resx">
+      <DependentUpon>ViewResultsForm.cs</DependentUpon>
     </EmbeddedResource>
     <None Include="packages.config" />
     <None Include="Properties\Settings.settings">

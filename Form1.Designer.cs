@@ -38,32 +38,32 @@
             this.txtSelectedPages = new System.Windows.Forms.TextBox();
             this.btnStartScreenshots = new System.Windows.Forms.Button();
             this.pnlOptions = new System.Windows.Forms.GroupBox();
+            this.btnViewResults = new System.Windows.Forms.Button();
             this.label2 = new System.Windows.Forms.Label();
             this.btnChooseOutput = new System.Windows.Forms.Button();
             this.txtOutputDir = new System.Windows.Forms.TextBox();
             this.btnExport = new System.Windows.Forms.Button();
             this.btnImport = new System.Windows.Forms.Button();
-            this.numDesktop = new System.Windows.Forms.NumericUpDown();
-            this.cbDesktop = new System.Windows.Forms.CheckBox();
-            this.numTablet = new System.Windows.Forms.NumericUpDown();
-            this.cbTablet = new System.Windows.Forms.CheckBox();
+            this.numDesktopWidth = new System.Windows.Forms.NumericUpDown();
+            this.numTabletWidth = new System.Windows.Forms.NumericUpDown();
             this.numMobileWidth = new System.Windows.Forms.NumericUpDown();
-            this.cbMobile = new System.Windows.Forms.CheckBox();
             this.folderBrowserDialog1 = new System.Windows.Forms.FolderBrowserDialog();
-            this.saveFileDialog1 = new System.Windows.Forms.SaveFileDialog();
+            this.saveSettingsDialog = new System.Windows.Forms.SaveFileDialog();
             this.openFileDialog1 = new System.Windows.Forms.OpenFileDialog();
-            this.btnViewResults = new System.Windows.Forms.Button();
             this.openManifestDialog = new System.Windows.Forms.OpenFileDialog();
             this.statusStrip1 = new System.Windows.Forms.StatusStrip();
-            this.lblStatus = new System.Windows.Forms.ToolStripStatusLabel();
             this.progressBar = new System.Windows.Forms.ToolStripProgressBar();
+            this.lblStatus = new System.Windows.Forms.ToolStripStatusLabel();
             this.toolStripSplitButton1 = new System.Windows.Forms.ToolStripSplitButton();
             this.btnCancel = new System.Windows.Forms.ToolStripMenuItem();
+            this.label3 = new System.Windows.Forms.Label();
+            this.label4 = new System.Windows.Forms.Label();
+            this.label5 = new System.Windows.Forms.Label();
             this.pnlCrawl.SuspendLayout();
             this.pnlSelectedPages.SuspendLayout();
             this.pnlOptions.SuspendLayout();
-            ((System.ComponentModel.ISupportInitialize)(this.numDesktop)).BeginInit();
-            ((System.ComponentModel.ISupportInitialize)(this.numTablet)).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)(this.numDesktopWidth)).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)(this.numTabletWidth)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.numMobileWidth)).BeginInit();
             this.statusStrip1.SuspendLayout();
             this.SuspendLayout();
@@ -150,24 +150,34 @@
             // 
             // pnlOptions
             // 
+            this.pnlOptions.Controls.Add(this.label5);
+            this.pnlOptions.Controls.Add(this.label4);
+            this.pnlOptions.Controls.Add(this.label3);
             this.pnlOptions.Controls.Add(this.btnViewResults);
             this.pnlOptions.Controls.Add(this.label2);
             this.pnlOptions.Controls.Add(this.btnChooseOutput);
             this.pnlOptions.Controls.Add(this.txtOutputDir);
             this.pnlOptions.Controls.Add(this.btnExport);
             this.pnlOptions.Controls.Add(this.btnImport);
-            this.pnlOptions.Controls.Add(this.numDesktop);
-            this.pnlOptions.Controls.Add(this.cbDesktop);
-            this.pnlOptions.Controls.Add(this.numTablet);
-            this.pnlOptions.Controls.Add(this.cbTablet);
+            this.pnlOptions.Controls.Add(this.numDesktopWidth);
+            this.pnlOptions.Controls.Add(this.numTabletWidth);
             this.pnlOptions.Controls.Add(this.numMobileWidth);
-            this.pnlOptions.Controls.Add(this.cbMobile);
             this.pnlOptions.Location = new System.Drawing.Point(21, 271);
             this.pnlOptions.Name = "pnlOptions";
             this.pnlOptions.Size = new System.Drawing.Size(1060, 249);
             this.pnlOptions.TabIndex = 3;
             this.pnlOptions.TabStop = false;
             this.pnlOptions.Text = "Options";
+            // 
+            // btnViewResults
+            // 
+            this.btnViewResults.Location = new System.Drawing.Point(586, 46);
+            this.btnViewResults.Name = "btnViewResults";
+            this.btnViewResults.Size = new System.Drawing.Size(295, 52);
+            this.btnViewResults.TabIndex = 11;
+            this.btnViewResults.Text = "View Existing Results";
+            this.btnViewResults.UseVisualStyleBackColor = true;
+            this.btnViewResults.Click += new System.EventHandler(this.btnViewResults_Click);
             // 
             // label2
             // 
@@ -215,78 +225,57 @@
             this.btnImport.UseVisualStyleBackColor = true;
             this.btnImport.Click += new System.EventHandler(this.btnImport_Click);
             // 
-            // numDesktop
+            // numDesktopWidth
             // 
-            this.numDesktop.Location = new System.Drawing.Point(124, 134);
-            this.numDesktop.Name = "numDesktop";
-            this.numDesktop.Size = new System.Drawing.Size(120, 29);
-            this.numDesktop.TabIndex = 5;
+            this.numDesktopWidth.Location = new System.Drawing.Point(124, 134);
+            this.numDesktopWidth.Maximum = new decimal(new int[] {
+            4000,
+            0,
+            0,
+            0});
+            this.numDesktopWidth.Name = "numDesktopWidth";
+            this.numDesktopWidth.Size = new System.Drawing.Size(120, 29);
+            this.numDesktopWidth.TabIndex = 5;
+            this.numDesktopWidth.Tag = "Desktop";
+            this.numDesktopWidth.ValueChanged += new System.EventHandler(this.DeviceWidth_Changed);
             // 
-            // cbDesktop
+            // numTabletWidth
             // 
-            this.cbDesktop.AutoSize = true;
-            this.cbDesktop.Checked = true;
-            this.cbDesktop.CheckState = System.Windows.Forms.CheckState.Checked;
-            this.cbDesktop.Location = new System.Drawing.Point(8, 135);
-            this.cbDesktop.Name = "cbDesktop";
-            this.cbDesktop.Size = new System.Drawing.Size(110, 29);
-            this.cbDesktop.TabIndex = 4;
-            this.cbDesktop.Text = "Desktop";
-            this.cbDesktop.UseVisualStyleBackColor = true;
-            // 
-            // numTablet
-            // 
-            this.numTablet.Location = new System.Drawing.Point(124, 90);
-            this.numTablet.Name = "numTablet";
-            this.numTablet.Size = new System.Drawing.Size(120, 29);
-            this.numTablet.TabIndex = 3;
-            // 
-            // cbTablet
-            // 
-            this.cbTablet.AutoSize = true;
-            this.cbTablet.Checked = true;
-            this.cbTablet.CheckState = System.Windows.Forms.CheckState.Checked;
-            this.cbTablet.Location = new System.Drawing.Point(8, 90);
-            this.cbTablet.Name = "cbTablet";
-            this.cbTablet.Size = new System.Drawing.Size(93, 29);
-            this.cbTablet.TabIndex = 2;
-            this.cbTablet.Text = "Tablet";
-            this.cbTablet.UseVisualStyleBackColor = true;
+            this.numTabletWidth.Location = new System.Drawing.Point(124, 90);
+            this.numTabletWidth.Maximum = new decimal(new int[] {
+            4000,
+            0,
+            0,
+            0});
+            this.numTabletWidth.Name = "numTabletWidth";
+            this.numTabletWidth.Size = new System.Drawing.Size(120, 29);
+            this.numTabletWidth.TabIndex = 3;
+            this.numTabletWidth.Tag = "Tablet";
+            this.numTabletWidth.ValueChanged += new System.EventHandler(this.DeviceWidth_Changed);
             // 
             // numMobileWidth
             // 
             this.numMobileWidth.Location = new System.Drawing.Point(124, 46);
+            this.numMobileWidth.Maximum = new decimal(new int[] {
+            4000,
+            0,
+            0,
+            0});
             this.numMobileWidth.Name = "numMobileWidth";
             this.numMobileWidth.Size = new System.Drawing.Size(120, 29);
             this.numMobileWidth.TabIndex = 1;
+            this.numMobileWidth.Tag = "Mobile";
+            this.numMobileWidth.ValueChanged += new System.EventHandler(this.DeviceWidth_Changed);
             // 
-            // cbMobile
+            // saveSettingsDialog
             // 
-            this.cbMobile.AutoSize = true;
-            this.cbMobile.Checked = true;
-            this.cbMobile.CheckState = System.Windows.Forms.CheckState.Checked;
-            this.cbMobile.Location = new System.Drawing.Point(8, 46);
-            this.cbMobile.Name = "cbMobile";
-            this.cbMobile.Size = new System.Drawing.Size(96, 29);
-            this.cbMobile.TabIndex = 0;
-            this.cbMobile.Text = "Mobile";
-            this.cbMobile.UseVisualStyleBackColor = true;
+            this.saveSettingsDialog.FileName = "settings.json";
             // 
             // openFileDialog1
             // 
             this.openFileDialog1.DefaultExt = "json";
             this.openFileDialog1.FileName = "settings";
             this.openFileDialog1.Filter = "JSON Files (*.json)|*.json";
-            // 
-            // btnViewResults
-            // 
-            this.btnViewResults.Location = new System.Drawing.Point(492, 46);
-            this.btnViewResults.Name = "btnViewResults";
-            this.btnViewResults.Size = new System.Drawing.Size(295, 52);
-            this.btnViewResults.TabIndex = 11;
-            this.btnViewResults.Text = "View Existing Results";
-            this.btnViewResults.UseVisualStyleBackColor = true;
-            this.btnViewResults.Click += new System.EventHandler(this.btnViewResults_Click);
             // 
             // openManifestDialog
             // 
@@ -307,15 +296,15 @@
             this.statusStrip1.TabIndex = 4;
             this.statusStrip1.Text = "statusStrip1";
             // 
-            // lblStatus
-            // 
-            this.lblStatus.Name = "lblStatus";
-            this.lblStatus.Size = new System.Drawing.Size(0, 29);
-            // 
             // progressBar
             // 
             this.progressBar.Name = "progressBar";
             this.progressBar.Size = new System.Drawing.Size(100, 28);
+            // 
+            // lblStatus
+            // 
+            this.lblStatus.Name = "lblStatus";
+            this.lblStatus.Size = new System.Drawing.Size(0, 29);
             // 
             // toolStripSplitButton1
             // 
@@ -331,9 +320,36 @@
             // btnCancel
             // 
             this.btnCancel.Name = "btnCancel";
-            this.btnCancel.Size = new System.Drawing.Size(315, 40);
+            this.btnCancel.Size = new System.Drawing.Size(193, 40);
             this.btnCancel.Text = "Cancel";
             this.btnCancel.Click += new System.EventHandler(this.btnCancel_Click);
+            // 
+            // label3
+            // 
+            this.label3.AutoSize = true;
+            this.label3.Location = new System.Drawing.Point(22, 48);
+            this.label3.Name = "label3";
+            this.label3.Size = new System.Drawing.Size(70, 25);
+            this.label3.TabIndex = 12;
+            this.label3.Text = "Mobile";
+            // 
+            // label4
+            // 
+            this.label4.AutoSize = true;
+            this.label4.Location = new System.Drawing.Point(22, 92);
+            this.label4.Name = "label4";
+            this.label4.Size = new System.Drawing.Size(67, 25);
+            this.label4.TabIndex = 13;
+            this.label4.Text = "Tablet";
+            // 
+            // label5
+            // 
+            this.label5.AutoSize = true;
+            this.label5.Location = new System.Drawing.Point(22, 136);
+            this.label5.Name = "label5";
+            this.label5.Size = new System.Drawing.Size(84, 25);
+            this.label5.TabIndex = 14;
+            this.label5.Text = "Desktop";
             // 
             // Form1
             // 
@@ -353,8 +369,8 @@
             this.pnlSelectedPages.PerformLayout();
             this.pnlOptions.ResumeLayout(false);
             this.pnlOptions.PerformLayout();
-            ((System.ComponentModel.ISupportInitialize)(this.numDesktop)).EndInit();
-            ((System.ComponentModel.ISupportInitialize)(this.numTablet)).EndInit();
+            ((System.ComponentModel.ISupportInitialize)(this.numDesktopWidth)).EndInit();
+            ((System.ComponentModel.ISupportInitialize)(this.numTabletWidth)).EndInit();
             ((System.ComponentModel.ISupportInitialize)(this.numMobileWidth)).EndInit();
             this.statusStrip1.ResumeLayout(false);
             this.statusStrip1.PerformLayout();
@@ -373,19 +389,16 @@
         private System.Windows.Forms.GroupBox pnlSelectedPages;
         private System.Windows.Forms.TextBox txtSelectedPages;
         private System.Windows.Forms.GroupBox pnlOptions;
-        private System.Windows.Forms.NumericUpDown numDesktop;
-        private System.Windows.Forms.CheckBox cbDesktop;
-        private System.Windows.Forms.NumericUpDown numTablet;
-        private System.Windows.Forms.CheckBox cbTablet;
+        private System.Windows.Forms.NumericUpDown numDesktopWidth;
+        private System.Windows.Forms.NumericUpDown numTabletWidth;
         private System.Windows.Forms.NumericUpDown numMobileWidth;
-        private System.Windows.Forms.CheckBox cbMobile;
         private System.Windows.Forms.Button btnExport;
         private System.Windows.Forms.Button btnImport;
         private System.Windows.Forms.FolderBrowserDialog folderBrowserDialog1;
         private System.Windows.Forms.Label label2;
         private System.Windows.Forms.Button btnChooseOutput;
         private System.Windows.Forms.TextBox txtOutputDir;
-        private System.Windows.Forms.SaveFileDialog saveFileDialog1;
+        private System.Windows.Forms.SaveFileDialog saveSettingsDialog;
         private System.Windows.Forms.OpenFileDialog openFileDialog1;
         private System.Windows.Forms.Button btnStartScreenshots;
         private System.Windows.Forms.Button btnViewResults;
@@ -395,6 +408,9 @@
         private System.Windows.Forms.ToolStripStatusLabel lblStatus;
         private System.Windows.Forms.ToolStripSplitButton toolStripSplitButton1;
         private System.Windows.Forms.ToolStripMenuItem btnCancel;
+        private System.Windows.Forms.Label label5;
+        private System.Windows.Forms.Label label4;
+        private System.Windows.Forms.Label label3;
     }
 }
 
