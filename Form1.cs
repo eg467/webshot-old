@@ -20,7 +20,7 @@ namespace Webshot
 {
     public enum Device
     {
-        Mobile, Tablet, Desktop
+        Desktop, Mobile, Tablet,
     }
 
     public partial class Form1 : Form
