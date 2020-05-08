@@ -1,17 +1,12 @@
 ﻿using Newtonsoft.Json;
-using OpenQA.Selenium.DevTools.DOM;
 using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Data;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Linq;
-using System.Security;
-using System.Text;
-using System.Text.RegularExpressions;
-using System.Threading.Tasks;
+using System.Net.NetworkInformation;
 using System.Windows.Forms;
 
 namespace Webshot
@@ -38,9 +33,6 @@ namespace Webshot
             {
                 _selectedImage = value;
 
-                this.pictureBox1.Top = 0;
-                this.pictureBox1.Left = 0;
-
                 var path = _selectedImage?.GetPath(OutputDirectory);
 
                 if (_selectedImage != null && !File.Exists(path))
@@ -54,7 +46,7 @@ namespace Webshot
                     this.lnkUrl.Text = _selectedImage.Result.Uri;
                     this.pictureBox1.Image = Image.FromFile(path);
                     this.btnShowInExplorer.Enabled = true;
-                    ApplyImageZoom(this.trackZoom.Value);
+                    ApplyImageZoom();
                 }
                 else
                 {
@@ -106,12 +98,25 @@ namespace Webshot
             //Regex.Replace(link, $@"https?://{_mostCommonHost}", "", RegexOptions.IgnoreCase);
         }
 
-        private void ViewResults_Load(object sender, EventArgs e)
+        private void ViewResultsForm_Load(object sender, EventArgs e)
         {
             AddByUriNode();
             AddByDeviceNode();
             this.treeFiles.ExpandAll();
             this.trackZoom.Value = 100;
+
+            this.pnlPicture.MouseWheel += PnlPicture_MouseWheel;
+        }
+
+        private void PnlPicture_MouseWheel(object sender, MouseEventArgs e)
+        {
+            MoveImage(dY: e.Delta);
+        }
+
+        private void ResizeScrollbars()
+        {
+            this.vscrollImg.Maximum = Math.Max(0, this.pictureBox1.Height - this.pnlPicture.ClientSize.Height + this.vscrollImg.LargeChange);
+            this.hscrollImg.Maximum = Math.Max(0, this.pictureBox1.Width - this.pnlPicture.ClientSize.Width + this.hscrollImg.LargeChange);
         }
 
         private void AddByUriNode()
@@ -173,12 +178,12 @@ namespace Webshot
             this.treeFiles.Nodes.Add(rootNode);
         }
 
-        private void treeFiles_AfterSelect(object sender, TreeViewEventArgs e)
+        private void TreeFiles_AfterSelect(object sender, TreeViewEventArgs e)
         {
             SelectedImage = e.Node.Tag as ScreenshotFile;
         }
 
-        private void lnkUrl_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
+        private void LnkUrl_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
         {
             var uri = this.lnkUrl.Text;
             if (uri.Length == 0)
@@ -188,7 +193,7 @@ namespace Webshot
             Process.Start(uri);
         }
 
-        private void btnShowInExplorer_Click(object sender, EventArgs e)
+        private void BtnShowInExplorer_Click(object sender, EventArgs e)
         {
             ShowSelectedImageInExplorer();
         }
@@ -208,7 +213,7 @@ namespace Webshot
             Process.Start(info);
         }
 
-        private void pictureBox1_MouseDown(object sender, MouseEventArgs e)
+        private void PictureBox1_MouseDown(object sender, MouseEventArgs e)
         {
             if (e.Button == MouseButtons.Left)
             {
@@ -217,36 +222,25 @@ namespace Webshot
             }
         }
 
-        private void pictureBox1_MouseMove(object sender, MouseEventArgs e)
+        private void PictureBox1_MouseMove(object sender, MouseEventArgs e)
         {
             if (this.pictureBox1.Image != null && e.Button == MouseButtons.Left)
             {
-                // Where the image would be w/o any constraints
-                var rawLocation = new Point(
-                    e.X + this.pictureBox1.Left - MouseDownLocation.X,
-                    e.Y + this.pictureBox1.Top - MouseDownLocation.Y);
-
-                // Constrain image movement so it's always visible.
-                var imgSize = this.pictureBox1.ClientSize;
-                var containerSize = this.pnlPicture.ClientSize;
-                var xRange = Math.Max(0, imgSize.Width - containerSize.Width);
-                var yRange = Math.Max(0, imgSize.Height - containerSize.Height);
-
-                this.pictureBox1.Left = InRange(rawLocation.X, -xRange, 0);
-                this.pictureBox1.Top = InRange(rawLocation.Y, -yRange, 0);
+                MoveImage(e.X - MouseDownLocation.X, e.Y - MouseDownLocation.Y);
             }
         }
 
         private int InRange(int value, int min, int max) =>
             Math.Min(max, Math.Max(min, value));
 
-        private void pictureBox1_MouseUp(object sender, MouseEventArgs e)
+        private void PictureBox1_MouseUp(object sender, MouseEventArgs e)
         {
             Cursor = Cursors.Default;
         }
 
-        private void ApplyImageZoom(int value)
+        private void ApplyImageZoom()
         {
+            var value = this.trackZoom.Value;
             this.lblZoom.Text = $"Zoom ({value}%):";
             if (this.pictureBox1.Image == null)
             {
@@ -258,13 +252,104 @@ namespace Webshot
             var scaledSize = new Size(
                 (int)Math.Round(factor * imgSize.Width),
                 (int)Math.Round(factor * imgSize.Height));
-            this.pictureBox1.Location = new Point(0, 0);
+
+            if (this.cbImageAutoWidth.Checked && scaledSize.Width > this.pnlPicture.ClientSize.Width)
+            {
+                var containerScale = (double)this.pnlPicture.ClientSize.Width / scaledSize.Width;
+                scaledSize = new Size(
+                    (int)Math.Floor(containerScale * scaledSize.Width),
+                    (int)Math.Floor(containerScale * scaledSize.Height));
+            }
+
             this.pictureBox1.Size = scaledSize;
+            ResizeScrollbars();
+            ImageLocation = new Point(0, 0);
         }
 
-        private void trackZoom_Scroll(object sender, EventArgs e)
+        private void TrackZoom_Scroll(object sender, EventArgs e)
         {
-            ApplyImageZoom(this.trackZoom.Value);
+            ApplyImageZoom();
+        }
+
+        private bool AutoScrollImage
+        {
+            get => this.timerScroll.Enabled;
+            set
+            {
+                this.btnToggleAutoScroll.Text = value ? "Stop Autoscroll" : "Start Autoscroll";
+                this.btnToggleAutoScroll.BackColor = value ? Color.LightGreen : Color.Pink;
+                this.timerScroll.Enabled = value;
+            }
+        }
+
+        private void BtnToggleAutoScroll_Click(object sender, EventArgs e)
+        {
+            AutoScrollImage = !AutoScrollImage;
+        }
+
+        private void TimerScroll_Tick(object sender, EventArgs e)
+        {
+            PerformAutoScroll();
+        }
+
+        private void PerformAutoScroll()
+        {
+            if (this.pictureBox1.Image != null && this.vscrollImg.Value < this.vscrollImg.Maximum)
+            {
+                MoveImage(dY: -this.trackScrollSpeed.Value);
+            }
+        }
+
+        private void VscrollImg_Scroll(object sender, ScrollEventArgs e)
+        {
+            ImageLocation = new Point(ImageLocation.X, -this.vscrollImg.Value);
+        }
+
+        private void HscrollImg_Scroll(object sender, ScrollEventArgs e)
+        {
+            ImageLocation = new Point(-this.hscrollImg.Value, ImageLocation.Y);
+        }
+
+        private void PnlPicture_Resize(object sender, EventArgs e)
+        {
+            if (this.cbImageAutoWidth.Checked)
+            {
+                ApplyImageZoom();
+            }
+            ResizeScrollbars();
+        }
+
+        private void MoveImage(int dX = 0, int dY = 0)
+        {
+            var translation = new Size(dX, dY);
+            ImageLocation = Point.Add(ImageLocation, translation);
+        }
+
+        private Point ImageLocation
+        {
+            get => this.pictureBox1.Location;
+            set
+            {
+                Console.WriteLine($"pictureBox1.Top={this.pictureBox1.Top}, ScrollVal={this.vscrollImg.Value}, ScrollMax={this.vscrollImg.Maximum}, panelHeight={this.pnlPicture.ClientSize.Height}");
+
+                var constrainedLocation = new Point(
+                    InRange(value.X, this.pnlPicture.ClientSize.Width - this.pictureBox1.Width, 0),
+                    InRange(value.Y, this.pnlPicture.ClientSize.Height - this.pictureBox1.Height, 0));
+
+                if (this.pictureBox1.Location == constrainedLocation)
+                {
+                    return;
+                }
+
+                this.pictureBox1.Location = constrainedLocation;
+                this.vscrollImg.Value = -constrainedLocation.Y;
+                this.hscrollImg.Value = -constrainedLocation.X;
+            }
+        }
+
+        private void CbImageAutoWidth_CheckedChanged(object sender, EventArgs e)
+        {
+            ApplyImageZoom();
         }
     }
 }

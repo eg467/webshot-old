@@ -4,7 +4,6 @@ using System.Data;
 using System.Diagnostics;
 using System.Linq;
 using System.Net;
-using System.Security.Policy;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Windows.Forms;
@@ -14,9 +13,9 @@ namespace Webshot
     public sealed class Spider
     {
         private const bool AppendTrailingSlash = true;
+
         public class CrawlResults
         {
-            
             private readonly Dictionary<Uri, VisitationStatus> _uris;
 
             public CrawlResults(Dictionary<Uri, VisitationStatus> uris)

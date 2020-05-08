@@ -92,6 +92,9 @@ namespace Webshot
             this.txtBaseUrl.Text = Properties.Settings.Default.BaseUrl ?? "";
             this.txtOutputDir.Text = Properties.Settings.Default.OutputDir ?? "";
             RefreshDeviceControls();
+
+            // FOR TESTING
+            LoadResults(@"C:\_TEMP\screenshot-results\manifest.json");
         }
 
         private void SetDeviceWidths()
