@@ -3,8 +3,13 @@ using System.Collections.Generic;
 
 namespace Webshot
 {
-    internal class Utils
+    internal static class Utils
     {
+        public static void ChangeSettings(Action<Properties.Settings> settingsFn)
+        {
+            settingsFn(Properties.Settings.Default);
+            Properties.Settings.Default.Save();
+        }
     }
 
     public static class Extensions

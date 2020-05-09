@@ -38,6 +38,9 @@
             this.txtSelectedPages = new System.Windows.Forms.TextBox();
             this.btnStartScreenshots = new System.Windows.Forms.Button();
             this.pnlOptions = new System.Windows.Forms.GroupBox();
+            this.label5 = new System.Windows.Forms.Label();
+            this.label4 = new System.Windows.Forms.Label();
+            this.label3 = new System.Windows.Forms.Label();
             this.btnViewResults = new System.Windows.Forms.Button();
             this.label2 = new System.Windows.Forms.Label();
             this.btnChooseOutput = new System.Windows.Forms.Button();
@@ -56,9 +59,6 @@
             this.lblStatus = new System.Windows.Forms.ToolStripStatusLabel();
             this.toolStripSplitButton1 = new System.Windows.Forms.ToolStripSplitButton();
             this.btnCancel = new System.Windows.Forms.ToolStripMenuItem();
-            this.label3 = new System.Windows.Forms.Label();
-            this.label4 = new System.Windows.Forms.Label();
-            this.label5 = new System.Windows.Forms.Label();
             this.pnlCrawl.SuspendLayout();
             this.pnlSelectedPages.SuspendLayout();
             this.pnlOptions.SuspendLayout();
@@ -86,7 +86,7 @@
             this.pnlCrawl.Size = new System.Drawing.Size(1066, 244);
             this.pnlCrawl.TabIndex = 1;
             this.pnlCrawl.TabStop = false;
-            this.pnlCrawl.Text = "Crawl Sites";
+            this.pnlCrawl.Text = "Crawl Pages";
             // 
             // btnStartCrawl
             // 
@@ -96,7 +96,7 @@
             this.btnStartCrawl.TabIndex = 4;
             this.btnStartCrawl.Text = "Start";
             this.btnStartCrawl.UseVisualStyleBackColor = true;
-            this.btnStartCrawl.Click += new System.EventHandler(this.btnStartCrawl_Click);
+            this.btnStartCrawl.Click += new System.EventHandler(this.BtnStartCrawl_Click);
             // 
             // cbCrawlExternalLinks
             // 
@@ -146,7 +146,7 @@
             this.btnStartScreenshots.TabIndex = 1;
             this.btnStartScreenshots.Text = "Start Screenshots";
             this.btnStartScreenshots.UseVisualStyleBackColor = true;
-            this.btnStartScreenshots.Click += new System.EventHandler(this.btnStartScreenshots_Click);
+            this.btnStartScreenshots.Click += new System.EventHandler(this.BtnStartScreenshots_Click);
             // 
             // pnlOptions
             // 
@@ -169,6 +169,33 @@
             this.pnlOptions.TabStop = false;
             this.pnlOptions.Text = "Options";
             // 
+            // label5
+            // 
+            this.label5.AutoSize = true;
+            this.label5.Location = new System.Drawing.Point(22, 136);
+            this.label5.Name = "label5";
+            this.label5.Size = new System.Drawing.Size(84, 25);
+            this.label5.TabIndex = 14;
+            this.label5.Text = "Desktop";
+            // 
+            // label4
+            // 
+            this.label4.AutoSize = true;
+            this.label4.Location = new System.Drawing.Point(22, 92);
+            this.label4.Name = "label4";
+            this.label4.Size = new System.Drawing.Size(67, 25);
+            this.label4.TabIndex = 13;
+            this.label4.Text = "Tablet";
+            // 
+            // label3
+            // 
+            this.label3.AutoSize = true;
+            this.label3.Location = new System.Drawing.Point(22, 48);
+            this.label3.Name = "label3";
+            this.label3.Size = new System.Drawing.Size(70, 25);
+            this.label3.TabIndex = 12;
+            this.label3.Text = "Mobile";
+            // 
             // btnViewResults
             // 
             this.btnViewResults.Location = new System.Drawing.Point(586, 46);
@@ -177,7 +204,7 @@
             this.btnViewResults.TabIndex = 11;
             this.btnViewResults.Text = "View Existing Results";
             this.btnViewResults.UseVisualStyleBackColor = true;
-            this.btnViewResults.Click += new System.EventHandler(this.btnViewResults_Click);
+            this.btnViewResults.Click += new System.EventHandler(this.BtnViewResults_Click);
             // 
             // label2
             // 
@@ -196,7 +223,7 @@
             this.btnChooseOutput.TabIndex = 9;
             this.btnChooseOutput.Text = "Browse...";
             this.btnChooseOutput.UseVisualStyleBackColor = true;
-            this.btnChooseOutput.Click += new System.EventHandler(this.btnChooseOutput_Click);
+            this.btnChooseOutput.Click += new System.EventHandler(this.BtnChooseOutput_Click);
             // 
             // txtOutputDir
             // 
@@ -213,7 +240,7 @@
             this.btnExport.TabIndex = 7;
             this.btnExport.Text = "Export Settings";
             this.btnExport.UseVisualStyleBackColor = true;
-            this.btnExport.Click += new System.EventHandler(this.btnExport_Click);
+            this.btnExport.Click += new System.EventHandler(this.BtnExport_Click);
             // 
             // btnImport
             // 
@@ -223,7 +250,7 @@
             this.btnImport.TabIndex = 6;
             this.btnImport.Text = "Import Settings";
             this.btnImport.UseVisualStyleBackColor = true;
-            this.btnImport.Click += new System.EventHandler(this.btnImport_Click);
+            this.btnImport.Click += new System.EventHandler(this.BtnImport_Click);
             // 
             // numDesktopWidth
             // 
@@ -322,34 +349,7 @@
             this.btnCancel.Name = "btnCancel";
             this.btnCancel.Size = new System.Drawing.Size(193, 40);
             this.btnCancel.Text = "Cancel";
-            this.btnCancel.Click += new System.EventHandler(this.btnCancel_Click);
-            // 
-            // label3
-            // 
-            this.label3.AutoSize = true;
-            this.label3.Location = new System.Drawing.Point(22, 48);
-            this.label3.Name = "label3";
-            this.label3.Size = new System.Drawing.Size(70, 25);
-            this.label3.TabIndex = 12;
-            this.label3.Text = "Mobile";
-            // 
-            // label4
-            // 
-            this.label4.AutoSize = true;
-            this.label4.Location = new System.Drawing.Point(22, 92);
-            this.label4.Name = "label4";
-            this.label4.Size = new System.Drawing.Size(67, 25);
-            this.label4.TabIndex = 13;
-            this.label4.Text = "Tablet";
-            // 
-            // label5
-            // 
-            this.label5.AutoSize = true;
-            this.label5.Location = new System.Drawing.Point(22, 136);
-            this.label5.Name = "label5";
-            this.label5.Size = new System.Drawing.Size(84, 25);
-            this.label5.TabIndex = 14;
-            this.label5.Text = "Desktop";
+            this.btnCancel.Click += new System.EventHandler(this.BtnCancel_Click);
             // 
             // Form1
             // 

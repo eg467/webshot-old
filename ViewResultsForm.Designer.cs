@@ -228,6 +228,7 @@
             this.trackZoom.LargeChange = 25;
             this.trackZoom.Location = new System.Drawing.Point(377, 3);
             this.trackZoom.Maximum = 150;
+            this.trackZoom.Minimum = 10;
             this.trackZoom.Name = "trackZoom";
             this.trackZoom.Size = new System.Drawing.Size(310, 80);
             this.trackZoom.SmallChange = 10;

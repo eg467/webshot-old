@@ -80,10 +80,12 @@ namespace Webshot
             set
             {
                 _devices = value;
-                Properties.Settings.Default.DesktopWidth = _devices[Device.Desktop];
-                Properties.Settings.Default.MobileWidth = _devices[Device.Mobile];
-                Properties.Settings.Default.TabletWidth = _devices[Device.Tablet];
-                Properties.Settings.Default.Save();
+                Utils.ChangeSettings(s =>
+                {
+                    s.DesktopWidth = _devices[Device.Desktop];
+                    s.MobileWidth = _devices[Device.Mobile];
+                    s.TabletWidth = _devices[Device.Tablet];
+                });
             }
         }
 
@@ -92,19 +94,6 @@ namespace Webshot
             this.txtBaseUrl.Text = Properties.Settings.Default.BaseUrl ?? "";
             this.txtOutputDir.Text = Properties.Settings.Default.OutputDir ?? "";
             RefreshDeviceControls();
-
-            // FOR TESTING
-            LoadResults(@"C:\_TEMP\screenshot-results\manifest.json");
-        }
-
-        private void SetDeviceWidths()
-        {
-            Devices = new Dictionary<Device, int>()
-            {
-                [Device.Desktop] = (int)this.numDesktopWidth.Value,
-                [Device.Mobile] = (int)this.numMobileWidth.Value,
-                [Device.Tablet] = (int)this.numTabletWidth.Value
-            };
         }
 
         private void SetDeviceWidth(Device device, int width)
@@ -144,7 +133,7 @@ namespace Webshot
             this.txtSelectedPages.Text = string.Join(Environment.NewLine, settings.Uris);
         }
 
-        private void btnChooseOutput_Click(object sender, EventArgs e)
+        private void BtnChooseOutput_Click(object sender, EventArgs e)
         {
             if (DialogResult.OK != folderBrowserDialog1.ShowDialog())
             {
@@ -153,7 +142,7 @@ namespace Webshot
             this.txtOutputDir.Text = folderBrowserDialog1.SelectedPath;
         }
 
-        private void btnExport_Click(object sender, EventArgs e)
+        private void BtnExport_Click(object sender, EventArgs e)
         {
             if (Directory.Exists(this.txtOutputDir.Text))
             {
@@ -171,7 +160,7 @@ namespace Webshot
                 serializedSettings);
         }
 
-        private void btnImport_Click(object sender, EventArgs e)
+        private void BtnImport_Click(object sender, EventArgs e)
         {
             if (DialogResult.OK != this.openFileDialog1.ShowDialog())
             {
@@ -189,7 +178,7 @@ namespace Webshot
             LoadSettings(settings);
         }
 
-        private void btnStartCrawl_Click(object sender, EventArgs e)
+        private void BtnStartCrawl_Click(object sender, EventArgs e)
         {
             var uri = this.txtBaseUrl.Text;
             if (uri.Length == 0)
@@ -199,9 +188,8 @@ namespace Webshot
             }
 
             this.pnlCrawl.Enabled = false;
-            Properties.Settings.Default.BaseUrl = uri;
-            Properties.Settings.Default.Save();
 
+            Utils.ChangeSettings(s => s.BaseUrl = uri);
             var spider = new Spider(uri, this.cbCrawlExternalLinks.Checked);
 
             CrawlResults pages = null;
@@ -243,7 +231,7 @@ namespace Webshot
             this.txtSelectedPages.Text = string.Join(Environment.NewLine, frm.IncludedPages);
         }
 
-        private async void btnStartScreenshots_Click(object sender, EventArgs e)
+        private void BtnStartScreenshots_Click(object sender, EventArgs e)
         {
             var outputDir = this.txtOutputDir.Text;
             var manifestPath = Path.Combine(outputDir, ManifestFilename);
@@ -255,7 +243,7 @@ namespace Webshot
 
             if (File.Exists(manifestPath)
                 && DialogResult.OK != MessageBox.Show(
-                "This directory already has results, overwrite them?",
+                "This directory already has results. Do you want to overwrite them?",
                 "Overwrite?",
                 MessageBoxButtons.OKCancel,
                 MessageBoxIcon.Warning,
@@ -265,10 +253,9 @@ namespace Webshot
             }
 
             Directory.CreateDirectory(outputDir);
-            Properties.Settings.Default.OutputDir = outputDir;
-            Properties.Settings.Default.Save();
 
-            await TakeScreenshots(outputDir, manifestPath);
+            Utils.ChangeSettings(s => s.OutputDir = outputDir);
+            TakeScreenshots(outputDir, manifestPath);
             LoadResults(manifestPath);
         }
 
@@ -278,51 +265,67 @@ namespace Webshot
             frm.ShowDialog();
         }
 
-        private async Task<List<ScreenshotResult>> TakeScreenshots(string outputDir, string manifestPath)
+        private List<ScreenshotResult> TakeScreenshots(string outputDir, string manifestPath)
         {
             var results = new List<ScreenshotResult>();
             using (var ss = new Screenshotter())
             {
-                var uris = this.txtSelectedPages.Text
-                    .Split(new[] { "\r\n" }, StringSplitOptions.RemoveEmptyEntries)
-                    .Select(u => new Uri(u));
-
-                foreach (var url in uris)
+                try
                 {
-                    var result = new ScreenshotResult()
-                    {
-                        Uri = url.ToString()
-                    };
+                    var uris = this.txtSelectedPages.Text
+                        .Split(new[] { "\r\n" }, StringSplitOptions.RemoveEmptyEntries)
+                        .Select(u => new Uri(u));
 
-                    foreach (var size in _devices.Where(d => d.Value > 0))
+                    foreach (var url in uris)
                     {
-                        var device = size.Key;
-                        var width = size.Value;
-                        var filenameUriComponent = Screenshotter.SanitizeFilename(url.ToString());
-                        var filename = $"{filenameUriComponent}.{device}.png";
-                        var relPath = Path.Combine("images", filename);
-                        result.Paths.Add(device, relPath);
-                        var path = Path.Combine(outputDir, relPath);
-
-                        try
-                        {
-                            await ss.TakeScreenshot(url.ToString(), path, width);
-                        }
-                        catch (Exception ex)
-                        {
-                            result.Error += ex.Message + Environment.NewLine;
-                        }
+                        var result = new ScreenshotResult(url.ToString());
+                        ScreenshotPageAsAllDevices(ss, url, result);
+                        results.Add(result);
                     }
-                    results.Add(result);
+                }
+                catch (UriFormatException ex)
+                {
+                    MessageBox.Show("Invalid Uri Provided: " + ex.Message);
+                    return new List<ScreenshotResult>();
                 }
             }
 
             var serializedResults = JsonConvert.SerializeObject(results);
             File.WriteAllText(manifestPath, serializedResults);
             return results;
+
+            // LOCAL FUNCTIONS
+
+            void ScreenshotPageAsAllDevices(Screenshotter ss, Uri url, ScreenshotResult result)
+            {
+                foreach (var size in _devices.Where(d => d.Value > 0))
+                {
+                    ScreenshotPageAsDevice(ss, url, result, size);
+                }
+            }
+
+            void ScreenshotPageAsDevice(Screenshotter ss, Uri url, ScreenshotResult result, KeyValuePair<Device, int> size)
+            {
+                var device = size.Key;
+                var width = size.Value;
+                var filenameUriComponent = Screenshotter.SanitizeFilename(url.ToString());
+                var filename = $"{filenameUriComponent}.{device}{Screenshotter.ImageExtension}";
+                var relPath = Path.Combine("images", filename);
+                var path = Path.Combine(outputDir, relPath);
+
+                try
+                {
+                    ss.TakeScreenshot(url.ToString(), path, width);
+                    result.Paths.Add(device, relPath);
+                }
+                catch (Exception ex)
+                {
+                    result.Error += ex.Message + Environment.NewLine;
+                }
+            }
         }
 
-        private void btnViewResults_Click(object sender, EventArgs e)
+        private void BtnViewResults_Click(object sender, EventArgs e)
         {
             if (Directory.Exists(this.txtOutputDir.Text))
             {
@@ -336,7 +339,7 @@ namespace Webshot
             }
         }
 
-        private void btnCancel_Click(object sender, EventArgs e)
+        private void BtnCancel_Click(object sender, EventArgs e)
         {
             CancellationTokenSource?.Cancel();
             CancellationTokenSource = null;

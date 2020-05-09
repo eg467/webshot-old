@@ -8,5 +8,14 @@ namespace Webshot
         public Dictionary<Device, string> Paths { get; set; } = new Dictionary<Device, string>();
 
         public string Error { get; set; }
+
+        public ScreenshotResult(string uri)
+        {
+            this.Uri = uri;
+        }
+
+        public ScreenshotResult()
+        {
+        }
     }
 }

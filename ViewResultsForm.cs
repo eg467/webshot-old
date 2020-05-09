@@ -124,7 +124,6 @@ namespace Webshot
         {
             AddByUriNode();
             AddByDeviceNode();
-            this.treeFiles.ExpandAll();
             // Force label update
             this.trackZoom.Value = 100;
             this.pnlPicture.MouseWheel += PnlPicture_MouseWheel;
@@ -196,8 +195,13 @@ namespace Webshot
                         .ToArray();
 
                     deviceNode.Nodes.AddRange(pageNodes);
+                    if (device == Device.Desktop)
+                    {
+                        deviceNode.Expand();
+                    }
                 });
             this.treeFiles.Nodes.Add(categoryNode);
+            categoryNode.Expand();
         }
 
         private void TreeFiles_AfterSelect(object sender, TreeViewEventArgs e)
@@ -294,7 +298,7 @@ namespace Webshot
             set
             {
                 this.btnToggleAutoScroll.Text = value ? "Stop Autoscroll" : "Start Autoscroll";
-                this.btnToggleAutoScroll.BackColor = value ? Color.LightGreen : Color.Pink;
+                this.btnToggleAutoScroll.BackColor = value ? Color.Pink : Color.LightGreen;
                 this.timerScroll.Enabled = value;
             }
         }
