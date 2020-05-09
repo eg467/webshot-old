@@ -75,7 +75,7 @@
     <Compile Include="Screenshotter.cs" />
     <Compile Include="Settings.cs" />
     <Compile Include="Spider.cs" />
-    <Compile Include="SaveChanges.cs" />
+    <Compile Include="Utils.cs" />
     <Compile Include="ViewResultsForm.cs">
       <SubType>Form</SubType>
     </Compile>
