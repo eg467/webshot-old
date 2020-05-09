@@ -15,6 +15,12 @@ namespace Webshot
     {
         private class ScreenshotFile
         {
+            public ScreenshotFile(ScreenshotResult result, Device device)
+            {
+                this.Result = result ?? throw new ArgumentNullException(nameof(result));
+                this.Device = device;
+            }
+
             public ScreenshotResult Result { get; set; }
             public Device Device { get; set; }
 
@@ -35,20 +41,30 @@ namespace Webshot
 
                 var path = _selectedImage?.GetPath(OutputDirectory);
 
-                if (_selectedImage != null && !File.Exists(path))
+                if (_selectedImage != null)
                 {
-                    MessageBox.Show("The selected image file doesn't exist.");
-                    _selectedImage = null;
+                    if (!File.Exists(path))
+                    {
+                        MessageBox.Show("The selected image file doesn't exist.");
+                        ClearImage();
+                        return;
+                    }
+                    SetImage();
+                }
+                else
+                {
+                    ClearImage();
                 }
 
-                if (_selectedImage != null)
+                void SetImage()
                 {
                     this.lnkUrl.Text = _selectedImage.Result.Uri;
                     this.pictureBox1.Image = Image.FromFile(path);
                     this.btnShowInExplorer.Enabled = true;
-                    ApplyImageZoom();
+                    ZoomImage();
                 }
-                else
+
+                void ClearImage()
                 {
                     this.lnkUrl.Text = "";
                     this.pictureBox1.Image?.Dispose();
@@ -58,10 +74,14 @@ namespace Webshot
             }
         }
 
-        private List<ScreenshotResult> _results;
-        private readonly string _mostCommonHost;
+        private readonly List<ScreenshotResult> _results;
 
-        private Point MouseDownLocation;
+        /// <summary>
+        /// Key=host name, Value=footnote identifer
+        /// </summary>
+        private readonly Dictionary<string, string> _hosts;
+
+        private Point _mouseDownLocation;
 
         public ViewResultsForm()
         {
@@ -71,40 +91,42 @@ namespace Webshot
 
         public ViewResultsForm(string manifestPath) : this()
         {
-            ManifestPath = manifestPath;
-
-            if (!File.Exists(ManifestPath))
+            if (!File.Exists(manifestPath))
             {
                 throw new FileNotFoundException(ManifestPath);
             }
 
-            var serializedResults = File.ReadAllText(ManifestPath);
-            _results = JsonConvert.DeserializeObject<List<ScreenshotResult>>(serializedResults);
+            ManifestPath = manifestPath;
 
-            // Hide the most common host to avoid visual clutter
-            _mostCommonHost = _results.GroupBy(x => new Uri(x.Uri).Host)
-                .Select(x => new { x.Key, Count = x.Count() })
-                .OrderByDescending(x => x.Count)
-                .Select(x => x.Key)
-                .FirstOrDefault() ?? "";
+            var serializedManifest = File.ReadAllText(ManifestPath);
+            _results = JsonConvert.DeserializeObject<List<ScreenshotResult>>(serializedManifest);
+
+            // Hide the most common host in display elements to avoid visual clutter.
+            _hosts = _results
+                .Select(r => GetHostKey(new Uri(r.Uri)))
+                .Distinct()
+                .Select((h, i) => new { Host = h, Index = i })
+                .ToDictionary(x => x.Host, x => x.Index.ToString());
+
+            this.lblLegend.Text = string.Join(
+                Environment.NewLine,
+                _hosts.Select(h => $"[{h.Value}] = {h.Key}").ToArray());
         }
 
-        private string RemoveCommonHost(string link)
-        {
-            var uri = new Uri(link);
-            var host = uri.Host;
-            return string.Equals(host, _mostCommonHost, StringComparison.OrdinalIgnoreCase)
-                ? uri.PathAndQuery : link;
-            //Regex.Replace(link, $@"https?://{_mostCommonHost}", "", RegexOptions.IgnoreCase);
-        }
+        private string GetHostKey(Uri uri) => uri.Host.ToUpperInvariant();
+
+        public string ShortenedUri(string uri) => ShortenedUri(new Uri(uri));
+
+        public string ShortenedUri(Uri uri) =>
+            $"[{_hosts[GetHostKey(uri)]}]{uri.PathAndQuery}";
 
         private void ViewResultsForm_Load(object sender, EventArgs e)
         {
             AddByUriNode();
             AddByDeviceNode();
             this.treeFiles.ExpandAll();
+            // Force label update
             this.trackZoom.Value = 100;
-
             this.pnlPicture.MouseWheel += PnlPicture_MouseWheel;
         }
 
@@ -115,67 +137,67 @@ namespace Webshot
 
         private void ResizeScrollbars()
         {
-            this.vscrollImg.Maximum = Math.Max(0, this.pictureBox1.Height - this.pnlPicture.ClientSize.Height + this.vscrollImg.LargeChange);
-            this.hscrollImg.Maximum = Math.Max(0, this.pictureBox1.Width - this.pnlPicture.ClientSize.Width + this.hscrollImg.LargeChange);
+            var extraPic = Size.Subtract(
+                this.pictureBox1.Size,
+                this.pnlPicture.ClientSize);
+
+            var scrollMargin = new Size(
+                this.hscrollImg.LargeChange,
+                this.vscrollImg.LargeChange);
+
+            var maxScroll = Size.Add(extraPic, scrollMargin);
+
+            this.vscrollImg.Maximum = Math.Max(0, maxScroll.Height);
+            this.hscrollImg.Maximum = Math.Max(0, maxScroll.Width);
         }
 
         private void AddByUriNode()
         {
-            var rootNode = new TreeNode("By Web Page");
+            var categoryNode = new TreeNode("By Web Page");
             _results.ForEach(r =>
             {
-                var uri = new Uri(r.Uri);
-
                 var childrenNodes = r.Paths
                     .Select(p => new TreeNode(p.Key.ToString())
                     {
-                        Tag = new ScreenshotFile
-                        {
-                            Device = p.Key,
-                            Result = r
-                        }
+                        Tag = new ScreenshotFile(r, p.Key)
                     })
-                    .Cast<TreeNode>()
                     .ToArray();
 
-                var node = new TreeNode(RemoveCommonHost(r.Uri), childrenNodes)
+                var pageNode = new TreeNode(ShortenedUri(r.Uri), childrenNodes)
                 {
                     ToolTipText = r.Uri,
                     NodeFont = new Font(this.treeFiles.Font, FontStyle.Bold)
                 };
 
-                rootNode.Nodes.Add(node);
+                categoryNode.Nodes.Add(pageNode);
             });
 
-            this.treeFiles.Nodes.Add(rootNode);
+            this.treeFiles.Nodes.Add(categoryNode);
         }
 
         private void AddByDeviceNode()
         {
-            var rootNode = new TreeNode("Device Widths");
+            var categoryNode = new TreeNode("Device Widths");
             Enum.GetValues(typeof(Device))
                 .Cast<Device>()
                 .ForEach(device =>
                 {
                     var deviceNode = new TreeNode(device.ToString());
-                    rootNode.Nodes.Add(deviceNode);
+                    categoryNode.Nodes.Add(deviceNode);
 
                     var pageNodes = _results
                         .Where(r => r.Paths.ContainsKey(device))
-                        .Select(r => new TreeNode(RemoveCommonHost(r.Uri))
+                        .Select(r => new TreeNode(ShortenedUri(r.Uri))
                         {
-                            Tag = new ScreenshotFile
-                            {
-                                Device = device,
-                                Result = r
-                            },
+                            Tag = new ScreenshotFile(r, device),
                             ToolTipText = r.Uri,
                             NodeFont = new Font(this.treeFiles.Font, FontStyle.Bold)
-                        }).ToArray();
+                        })
+                        .ToArray();
 
                     deviceNode.Nodes.AddRange(pageNodes);
                 });
-            this.treeFiles.Nodes.Add(rootNode);
+            this.treeFiles.Nodes.Add(categoryNode);
         }
 
         private void TreeFiles_AfterSelect(object sender, TreeViewEventArgs e)
@@ -186,19 +208,13 @@ namespace Webshot
         private void LnkUrl_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
         {
             var uri = this.lnkUrl.Text;
-            if (uri.Length == 0)
+            if (uri.Length > 0)
             {
-                return;
+                Process.Start(uri);
             }
-            Process.Start(uri);
         }
 
         private void BtnShowInExplorer_Click(object sender, EventArgs e)
-        {
-            ShowSelectedImageInExplorer();
-        }
-
-        private void ShowSelectedImageInExplorer()
         {
             string path = SelectedImage.GetPath(OutputDirectory);
 
@@ -218,7 +234,7 @@ namespace Webshot
             if (e.Button == MouseButtons.Left)
             {
                 Cursor = Cursors.NoMove2D;
-                MouseDownLocation = e.Location;
+                _mouseDownLocation = e.Location;
             }
         }
 
@@ -226,7 +242,7 @@ namespace Webshot
         {
             if (this.pictureBox1.Image != null && e.Button == MouseButtons.Left)
             {
-                MoveImage(e.X - MouseDownLocation.X, e.Y - MouseDownLocation.Y);
+                MoveImage(e.X - _mouseDownLocation.X, e.Y - _mouseDownLocation.Y);
             }
         }
 
@@ -238,22 +254,23 @@ namespace Webshot
             Cursor = Cursors.Default;
         }
 
-        private void ApplyImageZoom()
+        private void ZoomImage()
         {
-            var value = this.trackZoom.Value;
-            this.lblZoom.Text = $"Zoom ({value}%):";
+            var selectedZoom = this.trackZoom.Value;
+            this.lblZoom.Text = $"Zoom ({selectedZoom}%):";
+
             if (this.pictureBox1.Image == null)
             {
                 return;
             }
-            double factor = value / 100.0;
+            double zoomFactor = selectedZoom / 100.0;
             var imgSize = this.pictureBox1.Image.Size;
 
             var scaledSize = new Size(
-                (int)Math.Round(factor * imgSize.Width),
-                (int)Math.Round(factor * imgSize.Height));
+                (int)Math.Round(zoomFactor * imgSize.Width),
+                (int)Math.Round(zoomFactor * imgSize.Height));
 
-            if (this.cbImageAutoWidth.Checked && scaledSize.Width > this.pnlPicture.ClientSize.Width)
+            if (this.cbFitImage.Checked && scaledSize.Width > this.pnlPicture.ClientSize.Width)
             {
                 var containerScale = (double)this.pnlPicture.ClientSize.Width / scaledSize.Width;
                 scaledSize = new Size(
@@ -268,7 +285,7 @@ namespace Webshot
 
         private void TrackZoom_Scroll(object sender, EventArgs e)
         {
-            ApplyImageZoom();
+            ZoomImage();
         }
 
         private bool AutoScrollImage
@@ -312,9 +329,9 @@ namespace Webshot
 
         private void PnlPicture_Resize(object sender, EventArgs e)
         {
-            if (this.cbImageAutoWidth.Checked)
+            if (this.cbFitImage.Checked)
             {
-                ApplyImageZoom();
+                ZoomImage();
             }
             ResizeScrollbars();
         }
@@ -330,8 +347,6 @@ namespace Webshot
             get => this.pictureBox1.Location;
             set
             {
-                Console.WriteLine($"pictureBox1.Top={this.pictureBox1.Top}, ScrollVal={this.vscrollImg.Value}, ScrollMax={this.vscrollImg.Maximum}, panelHeight={this.pnlPicture.ClientSize.Height}");
-
                 var constrainedLocation = new Point(
                     InRange(value.X, this.pnlPicture.ClientSize.Width - this.pictureBox1.Width, 0),
                     InRange(value.Y, this.pnlPicture.ClientSize.Height - this.pictureBox1.Height, 0));
@@ -349,7 +364,7 @@ namespace Webshot
 
         private void CbImageAutoWidth_CheckedChanged(object sender, EventArgs e)
         {
-            ApplyImageZoom();
+            ZoomImage();
         }
     }
 }

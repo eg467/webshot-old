@@ -30,13 +30,15 @@
         {
             this.components = new System.ComponentModel.Container();
             this.splitContainer1 = new System.Windows.Forms.SplitContainer();
+            this.pnlLegend = new System.Windows.Forms.Panel();
+            this.lblLegend = new System.Windows.Forms.Label();
             this.treeFiles = new System.Windows.Forms.TreeView();
             this.pnlPicture = new System.Windows.Forms.Panel();
             this.pictureBox1 = new System.Windows.Forms.PictureBox();
             this.hscrollImg = new System.Windows.Forms.HScrollBar();
             this.vscrollImg = new System.Windows.Forms.VScrollBar();
             this.panel1 = new System.Windows.Forms.Panel();
-            this.cbImageAutoWidth = new System.Windows.Forms.CheckBox();
+            this.cbFitImage = new System.Windows.Forms.CheckBox();
             this.btnToggleAutoScroll = new System.Windows.Forms.Button();
             this.lblScrollSpeed = new System.Windows.Forms.Label();
             this.trackScrollSpeed = new System.Windows.Forms.TrackBar();
@@ -49,6 +51,7 @@
             this.splitContainer1.Panel1.SuspendLayout();
             this.splitContainer1.Panel2.SuspendLayout();
             this.splitContainer1.SuspendLayout();
+            this.pnlLegend.SuspendLayout();
             this.pnlPicture.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.pictureBox1)).BeginInit();
             this.panel1.SuspendLayout();
@@ -65,6 +68,7 @@
             // splitContainer1.Panel1
             // 
             this.splitContainer1.Panel1.Controls.Add(this.treeFiles);
+            this.splitContainer1.Panel1.Controls.Add(this.pnlLegend);
             // 
             // splitContainer1.Panel2
             // 
@@ -76,12 +80,31 @@
             this.splitContainer1.SplitterDistance = 466;
             this.splitContainer1.TabIndex = 0;
             // 
+            // pnlLegend
+            // 
+            this.pnlLegend.AutoScroll = true;
+            this.pnlLegend.Controls.Add(this.lblLegend);
+            this.pnlLegend.Dock = System.Windows.Forms.DockStyle.Bottom;
+            this.pnlLegend.Location = new System.Drawing.Point(0, 936);
+            this.pnlLegend.Name = "pnlLegend";
+            this.pnlLegend.Size = new System.Drawing.Size(466, 137);
+            this.pnlLegend.TabIndex = 2;
+            // 
+            // lblLegend
+            // 
+            this.lblLegend.AutoSize = true;
+            this.lblLegend.Location = new System.Drawing.Point(12, 10);
+            this.lblLegend.Name = "lblLegend";
+            this.lblLegend.Size = new System.Drawing.Size(0, 25);
+            this.lblLegend.TabIndex = 1;
+            // 
             // treeFiles
             // 
             this.treeFiles.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.treeFiles.HideSelection = false;
             this.treeFiles.Location = new System.Drawing.Point(0, 0);
             this.treeFiles.Name = "treeFiles";
-            this.treeFiles.Size = new System.Drawing.Size(466, 1073);
+            this.treeFiles.Size = new System.Drawing.Size(466, 936);
             this.treeFiles.TabIndex = 0;
             this.treeFiles.AfterSelect += new System.Windows.Forms.TreeViewEventHandler(this.TreeFiles_AfterSelect);
             // 
@@ -134,7 +157,7 @@
             // 
             // panel1
             // 
-            this.panel1.Controls.Add(this.cbImageAutoWidth);
+            this.panel1.Controls.Add(this.cbFitImage);
             this.panel1.Controls.Add(this.btnToggleAutoScroll);
             this.panel1.Controls.Add(this.lblScrollSpeed);
             this.panel1.Controls.Add(this.trackScrollSpeed);
@@ -148,18 +171,18 @@
             this.panel1.Size = new System.Drawing.Size(1483, 183);
             this.panel1.TabIndex = 0;
             // 
-            // cbImageAutoWidth
+            // cbFitImage
             // 
-            this.cbImageAutoWidth.AutoSize = true;
-            this.cbImageAutoWidth.Checked = true;
-            this.cbImageAutoWidth.CheckState = System.Windows.Forms.CheckState.Checked;
-            this.cbImageAutoWidth.Location = new System.Drawing.Point(377, 54);
-            this.cbImageAutoWidth.Name = "cbImageAutoWidth";
-            this.cbImageAutoWidth.Size = new System.Drawing.Size(171, 29);
-            this.cbImageAutoWidth.TabIndex = 7;
-            this.cbImageAutoWidth.Text = "Auto-fit to width";
-            this.cbImageAutoWidth.UseVisualStyleBackColor = true;
-            this.cbImageAutoWidth.CheckedChanged += new System.EventHandler(this.CbImageAutoWidth_CheckedChanged);
+            this.cbFitImage.AutoSize = true;
+            this.cbFitImage.Checked = true;
+            this.cbFitImage.CheckState = System.Windows.Forms.CheckState.Checked;
+            this.cbFitImage.Location = new System.Drawing.Point(377, 54);
+            this.cbFitImage.Name = "cbFitImage";
+            this.cbFitImage.Size = new System.Drawing.Size(171, 29);
+            this.cbFitImage.TabIndex = 7;
+            this.cbFitImage.Text = "Auto-fit to width";
+            this.cbFitImage.UseVisualStyleBackColor = true;
+            this.cbFitImage.CheckedChanged += new System.EventHandler(this.CbImageAutoWidth_CheckedChanged);
             // 
             // btnToggleAutoScroll
             // 
@@ -253,6 +276,8 @@
             this.splitContainer1.Panel2.ResumeLayout(false);
             ((System.ComponentModel.ISupportInitialize)(this.splitContainer1)).EndInit();
             this.splitContainer1.ResumeLayout(false);
+            this.pnlLegend.ResumeLayout(false);
+            this.pnlLegend.PerformLayout();
             this.pnlPicture.ResumeLayout(false);
             ((System.ComponentModel.ISupportInitialize)(this.pictureBox1)).EndInit();
             this.panel1.ResumeLayout(false);
@@ -280,6 +305,8 @@
         private System.Windows.Forms.Timer timerScroll;
         private System.Windows.Forms.HScrollBar hscrollImg;
         private System.Windows.Forms.VScrollBar vscrollImg;
-        private System.Windows.Forms.CheckBox cbImageAutoWidth;
+        private System.Windows.Forms.CheckBox cbFitImage;
+        private System.Windows.Forms.Panel pnlLegend;
+        private System.Windows.Forms.Label lblLegend;
     }
 }
