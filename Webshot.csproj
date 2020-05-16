@@ -38,6 +38,9 @@
     <Reference Include="Newtonsoft.Json, Version=12.0.0.0, Culture=neutral, PublicKeyToken=30ad4fe6b2a6aeed, processorArchitecture=MSIL">
       <HintPath>packages\Newtonsoft.Json.12.0.3\lib\net45\Newtonsoft.Json.dll</HintPath>
     </Reference>
+    <Reference Include="ParallelExtensionsExtras, Version=1.2.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>packages\MSFT.ParallelExtensionsExtras.1.2.0\lib\ParallelExtensionsExtras.dll</HintPath>
+    </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
     <Reference Include="System.Xml.Linq" />
@@ -57,37 +60,88 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="ChoosePagesForm.cs">
+    <Compile Include="Controls\ViewResultsControl.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Controls\ViewResultsControl.Designer.cs">
+      <DependentUpon>ViewResultsControl.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Forms\OptionsFormController.cs" />
+    <Compile Include="Options\AuthenticationOptions.cs" />
+    <Compile Include="ProjectInput.cs" />
+    <Compile Include="Store\CompositeFileStore.cs" />
+    <Compile Include="Options\DeviceScreenshotOptions.cs" />
+    <Compile Include="Store\FileProjectStore.cs" />
+    <Compile Include="Forms\ChoosePagesForm.cs">
       <SubType>Form</SubType>
     </Compile>
-    <Compile Include="ChoosePagesForm.Designer.cs">
+    <Compile Include="Forms\ChoosePagesForm.Designer.cs">
       <DependentUpon>ChoosePagesForm.cs</DependentUpon>
     </Compile>
-    <Compile Include="Form1.cs">
+    <Compile Include="Forms\OptionsForm.cs">
       <SubType>Form</SubType>
     </Compile>
-    <Compile Include="Form1.Designer.cs">
+    <Compile Include="Forms\OptionsForm.Designer.cs">
+      <DependentUpon>OptionsForm.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Options\Options.cs" />
+    <Compile Include="Screenshots\ScreenshotFile.cs" />
+    <Compile Include="Controls\ScreenshotTree.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Controls\ScreenshotTree.Designer.cs">
+      <DependentUpon>ScreenshotTree.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Controls\LargeImageViewer.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Controls\LargeImageViewer.Designer.cs">
+      <DependentUpon>LargeImageViewer.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Controls\SiteLegend.cs" />
+    <Compile Include="CrawlResults.cs" />
+    <Compile Include="Forms\Form1.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Forms\Form1.Designer.cs">
       <DependentUpon>Form1.cs</DependentUpon>
     </Compile>
+    <Compile Include="Forms\Form1Controller.cs" />
+    <Compile Include="Forms\FormCreator.cs" />
     <Compile Include="Program.cs" />
+    <Compile Include="Project.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="ScreenshotResult.cs" />
-    <Compile Include="Screenshotter.cs" />
-    <Compile Include="Settings.cs" />
+    <Compile Include="Options\ScreenshotOptions.cs" />
+    <Compile Include="Screenshots\ScreenshotResult.cs" />
+    <Compile Include="Screenshots\Screenshotter.cs" />
     <Compile Include="Spider.cs" />
+    <Compile Include="Options\SpiderOptions.cs" />
     <Compile Include="Utils.cs" />
-    <Compile Include="ViewResultsForm.cs">
+    <Compile Include="Forms\ViewResultsForm.cs">
       <SubType>Form</SubType>
     </Compile>
-    <Compile Include="ViewResultsForm.Designer.cs">
+    <Compile Include="Forms\ViewResultsForm.Designer.cs">
       <DependentUpon>ViewResultsForm.cs</DependentUpon>
     </Compile>
-    <Compile Include="VisitationStatus.cs" />
-    <EmbeddedResource Include="ChoosePagesForm.resx">
+    <Compile Include="Options\ViewerOptions.cs" />
+    <Compile Include="Forms\ViewResultsFormController.cs" />
+    <EmbeddedResource Include="Controls\ViewResultsControl.resx">
+      <DependentUpon>ViewResultsControl.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Forms\ChoosePagesForm.resx">
       <DependentUpon>ChoosePagesForm.cs</DependentUpon>
     </EmbeddedResource>
-    <EmbeddedResource Include="Form1.resx">
+    <EmbeddedResource Include="Controls\ScreenshotTree.resx">
+      <DependentUpon>ScreenshotTree.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Controls\LargeImageViewer.resx">
+      <DependentUpon>LargeImageViewer.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Forms\Form1.resx">
       <DependentUpon>Form1.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Forms\OptionsForm.resx">
+      <DependentUpon>OptionsForm.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="Properties\Resources.resx">
       <Generator>ResXFileCodeGenerator</Generator>
@@ -98,7 +152,7 @@
       <AutoGen>True</AutoGen>
       <DependentUpon>Resources.resx</DependentUpon>
     </Compile>
-    <EmbeddedResource Include="ViewResultsForm.resx">
+    <EmbeddedResource Include="Forms\ViewResultsForm.resx">
       <DependentUpon>ViewResultsForm.cs</DependentUpon>
     </EmbeddedResource>
     <None Include="packages.config" />

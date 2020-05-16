@@ -5,7 +5,9 @@ using System;
 using System.Collections.Generic;
 using System.Data.SqlTypes;
 using System.Diagnostics;
+using System.Drawing.Text;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
@@ -21,10 +23,16 @@ namespace Webshot
         public static readonly string ImageExtension = $".{_imageFormat.ToString().ToLower()}";
 
         private readonly ChromeDriver _driver;
+        private readonly ScreenshotterOptions _options;
 
-        public Screenshotter()
+        public Screenshotter(ScreenshotterOptions options)
         {
             _driver = CreateDriver();
+            _options = options;
+        }
+
+        public Screenshotter() : this(new ScreenshotterOptions())
+        {
         }
 
         public void Dispose()
@@ -53,6 +61,7 @@ namespace Webshot
             _driver.Navigate().GoToUrl(url);
 
             ResizeWindow();
+            HighlightBrokenLinks();
             var screenshot = _driver.GetScreenshot();
             screenshot.SaveAsFile(filePath, _imageFormat);
             ClearResize();
@@ -77,7 +86,7 @@ namespace Webshot
                         document.body.scrollWidth,
                         document.documentElement.scrollWidth)";
 
-                // Iteratively resize height to allow new elements to (lazy) load.
+                // Repeatedly resize height to allow new elements to (lazily) load.
                 do
                 {
                     prevHeight = calculatedHeight;
@@ -89,7 +98,7 @@ namespace Webshot
                     {
                         ["width"] = _driver.ExecuteScript(calculatedWidth),
                         ["height"] = calculatedHeight,
-                        ["deviceScaleFactor"] = (double)_driver.ExecuteScript("return window.devicePixelRatio"),
+                        ["deviceScaleFactor"] = ScaleFactor(false),
                         ["mobile"] = _driver.ExecuteScript("return typeof window.orientation !== 'undefined'")
                     };
                     _driver.ExecuteChromeCommand("Emulation.setDeviceMetricsOverride", metrics);
@@ -111,12 +120,48 @@ namespace Webshot
                     double numericHeight = Convert.ToDouble(jsHeight);
                     return (int)Math.Ceiling(numericHeight);
                 }
+
+                // False for a 1:1 pixel ratio with the image
+                // True for an easier-to-read image on the current monitor.
+                double ScaleFactor(bool shouldScaleImage) =>
+                    shouldScaleImage
+                    ? (double)_driver.ExecuteScript("return window.devicePixelRatio")
+                    : 1.0;
             }
 
             void ClearResize()
             {
                 _driver.ExecuteChromeCommand("Emulation.clearDeviceMetricsOverride", new Dictionary<string, Object>());
             }
+
+            void HighlightBrokenLinks()
+            {
+                if (_options?.BrokenLinksToHighlight?.Any() != true)
+                {
+                    return;
+                }
+
+                var selectors = _options.BrokenLinksToHighlight.Select(l => $"a[href='{l}']");
+                var combinedSelector = string.Join(",", selectors);
+
+                var styles = $@"
+                    {combinedSelector}::after {{
+                        content: 'BROKEN LINK';
+                        background-color: red;
+                        color: white;
+                        font-weight: bold;
+                        padding: 3px;
+                    }}";
+
+                var script = $@"document.write('<style type=""text/css"">{styles}</style>');";
+                _driver.ExecuteScript(script);
+            }
         }
+    }
+
+    public class ScreenshotterOptions
+    {
+        public IEnumerable<string> BrokenLinksToHighlight { get; set; } =
+            Enumerable.Empty<string>();
     }
 }

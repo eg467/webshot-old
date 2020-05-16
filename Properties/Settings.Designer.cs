@@ -82,5 +82,28 @@ namespace Webshot.Properties {
                 this["TabletWidth"] = value;
             }
         }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        public global::System.Collections.Specialized.StringCollection RecentProjects {
+            get {
+                return ((global::System.Collections.Specialized.StringCollection)(this["RecentProjects"]));
+            }
+            set {
+                this["RecentProjects"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("")]
+        public string Options {
+            get {
+                return ((string)(this["Options"]));
+            }
+            set {
+                this["Options"] = value;
+            }
+        }
     }
 }

@@ -1,4 +1,6 @@
 ﻿using System;
+using System.IO;
+using System.Linq;
 using System.Windows.Forms;
 
 namespace Webshot
@@ -9,7 +11,7 @@ namespace Webshot
         /// The main entry point for the application.
         /// </summary>
         [STAThread]
-        private static void Main()
+        private static void Main(params string[] args)
         {
             if (Environment.OSVersion.Version.Major >= 6)
             {
@@ -18,7 +20,21 @@ namespace Webshot
 
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
-            Application.Run(new Form1());
+
+            var projectPath = File.Exists(args.FirstOrDefault())
+                ? args.FirstOrDefault()
+                : FileProjectStore.CreateProjectDirectory(temporary: true);
+
+            var form = CreateForm(projectPath);
+
+            Application.Run(form);
+        }
+
+        private static Form1 CreateForm(string projectPath)
+        {
+            projectPath = Path.GetDirectoryName(projectPath);
+            var frmController = new Form1Controller(projectPath);
+            return frmController.CreateForm();
         }
 
         [System.Runtime.InteropServices.DllImport("user32.dll")]
