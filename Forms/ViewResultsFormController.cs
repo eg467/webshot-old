@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace Webshot
 {
@@ -12,12 +14,19 @@ namespace Webshot
         public ViewResultsForm Form => _formCreator.Form;
 
         private Project Project => _debouncedProject.Project;
+        private readonly Dictionary<string, ScreenshotResults> _results;
 
         private readonly DebouncedProject _debouncedProject;
 
-        public ViewResultsFormController(DebouncedProject project)
+        public ViewResultsFormController(DebouncedProject project, Dictionary<string, ScreenshotResults> results)
         {
+            if (project is null)
+            {
+                throw new ArgumentNullException(nameof(project));
+            }
+
             _debouncedProject = project;
+            _results = results ?? new Dictionary<string, ScreenshotResults>();
             _formCreator = new FormCreator<
                 ViewResultsForm,
                 ViewResultsFormController>(this);
@@ -38,20 +47,26 @@ namespace Webshot
             }
 
             Form.Load -= Form_Load;
+            Form.SessionSelected -= Form_SessionSelected;
             Form.OptionsChanged -= Form_OptionsChanged;
             Form.ScreenshotSelected -= Form_ScreenshotSelected;
         }
 
         private void WireEvents()
         {
-            if (Form == null)
-            {
-                return;
-            }
+            if (Form == null) return;
 
             Form.Load += Form_Load;
+            Form.SessionSelected += Form_SessionSelected;
             Form.OptionsChanged += Form_OptionsChanged;
             Form.ScreenshotSelected += Form_ScreenshotSelected;
+        }
+
+        private void Form_SessionSelected(object sender, EventArgs e)
+        {
+            string key = Form.SelectedSession;
+            ScreenshotResults screenshots = _results[key];
+            Form.ShowSessionScreenshots(screenshots);
         }
 
         private void Form_ScreenshotSelected(object sender, EventArgs e)
@@ -69,8 +84,9 @@ namespace Webshot
 
         private void Form_Load(object sender, EventArgs e)
         {
-            Form.Results = Project.Output.Screenshots;
             Form.Options = Project.Options.ViewerOptions;
+            Form.SessionIds = _results.Keys;
+            Form.SelectedSession = _results.Keys.FirstOrDefault();
         }
     }
 }

@@ -23,7 +23,7 @@ namespace Webshot
 
             var projectPath = File.Exists(args.FirstOrDefault())
                 ? args.FirstOrDefault()
-                : FileProjectStore.CreateProjectDirectory(temporary: true);
+                : FileProjectStore.CreateTempProjectDirectory(temporaryDir: true);
 
             var form = CreateForm(projectPath);
 

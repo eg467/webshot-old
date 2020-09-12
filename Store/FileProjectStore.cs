@@ -10,12 +10,13 @@ namespace Webshot
 {
     public class FileProjectStore : IProjectStore
     {
-        public const string SubProjectDirName = "SubProjects";
         public const string ProjectFilename = "webshots.wsproj";
+        public const string ScreenshotDir = "Screenshots";
+        public const string ScreenshotManifestFilename = "screenshots.manifest";
 
         private FileStore<Project> _filestore;
 
-        public bool IsSaved => DirectoryContainsProject(ProjectDir);
+        public bool ProjectExists => DirectoryContainsProject(ProjectDir);
 
         public string ProjectDir
         {
@@ -34,31 +35,8 @@ namespace Webshot
         public FileProjectStore(string projectDir) : this()
         {
             ProjectDir = projectDir;
+            Directory.CreateDirectory(projectDir);
         }
-
-        public static Project CreateOrLoadProject(string directory)
-        {
-            if (string.IsNullOrEmpty(directory))
-            {
-                throw new ArgumentNullException(nameof(directory));
-            }
-
-            var store = new FileProjectStore(directory);
-
-            if (DirectoryContainsProject(directory))
-            {
-                return store.Load();
-            }
-            else
-            {
-                Directory.CreateDirectory(directory);
-                var project = new Project(store);
-                project.Save();
-                return project;
-            }
-        }
-
-        public string ProjectPath => _filestore.FilePath;
 
         public static string UserAppProjects =>
             Path.Combine(
@@ -69,14 +47,14 @@ namespace Webshot
         /// <summary>
         ///
         /// </summary>
-        /// <param name="temporary">
+        /// <param name="temporaryDir">
         /// True if the data should be stored in a temp directory,
         /// False to store in the application directory</param>
         /// <returns></returns>
-        public static string CreateProjectDirectory(bool temporary)
+        public static string CreateTempProjectDirectory(bool temporaryDir)
         {
-            string TempDir() => Path.Combine(Path.GetTempPath(), nameof(Webshot));
-            string basePath = temporary ? TempDir() : UserAppProjects;
+            string GetTempDir() => Path.Combine(Path.GetTempPath(), nameof(Webshot));
+            string basePath = temporaryDir ? GetTempDir() : UserAppProjects;
             var timestamp = DateTime.Now.Timestamp();
 
             var path = Path.Combine(basePath, timestamp);
@@ -86,6 +64,14 @@ namespace Webshot
             }
             Directory.CreateDirectory(path);
             return path;
+        }
+
+        public Project Create()
+        {
+            var project = new Project(this);
+            project.Save();
+            SaveToRecentProjectsList();
+            return project;
         }
 
         public Project Load()
@@ -99,7 +85,6 @@ namespace Webshot
         public void Save(Project project)
         {
             _filestore.Save(project);
-            SaveToRecentProjectsList();
         }
 
         private void SaveToRecentProjectsList()
@@ -116,32 +101,49 @@ namespace Webshot
         public static bool DirectoryContainsProject(string directory) =>
             directory != null && File.Exists(Path.Combine(directory, ProjectFilename));
 
-        public IEnumerable<Project> GetSubprojects()
-        {
-            var fullSubprojectDir = Path.Combine(ProjectDir, SubProjectDirName);
-            return Directory.Exists(fullSubprojectDir)
-                ? Directory.EnumerateDirectories(fullSubprojectDir)
-                    .Where(DirectoryContainsProject)
-                    .Select(d => new FileProjectStore(d))
-                    .Select(s => new Project(s))
-                : Enumerable.Empty<Project>();
-        }
-
         public Image GetImage(ScreenshotFile file)
         {
             var relPath = file.Result.Paths[file.Device].Trim('\\');
             var path = Path.Combine(ProjectDir, relPath);
             return Image.FromFile(path);
         }
-    }
 
-    public interface IOptionsSaver
-    {
-        void SaveOptions(Options options);
-    }
+        public void SaveScreenshotManifest(string label, ScreenshotResults results)
+        {
+            var screenshotDir = Path.Combine(
+                ProjectDir,
+                ScreenshotDir,
+                Utils.SanitizeFilename(label));
 
-    public interface IOutputSaver
-    {
-        void SaveOutput(ProjectOutput output);
+            Directory.CreateDirectory(screenshotDir);
+
+            var manifestPath = Path.Combine(screenshotDir, ScreenshotManifestFilename);
+
+            var store = new FileStore<ScreenshotResults>(manifestPath);
+            store.Save(results);
+        }
+
+        public Dictionary<string, ScreenshotResults> GetScreenshots()
+        {
+            var screenshotPath = Path.Combine(ProjectDir, ScreenshotDir);
+
+            string GetManifestPath(string dir) =>
+                Path.Combine(dir, ScreenshotManifestFilename);
+
+            string GetDirectoryName(string manifestPath) =>
+                Path.GetFileName(Path.GetDirectoryName(manifestPath));
+
+            ScreenshotResults ReadManifest(string path)
+            {
+                var store = new FileStore<ScreenshotResults>(path);
+                return store.Load();
+            }
+
+            // Each subdirectory under the output directory represents a session of screenshots.
+            return Directory.GetDirectories(screenshotPath)
+                .Select(GetManifestPath)
+                .Where(File.Exists)
+                .ToDictionary(GetDirectoryName, ReadManifest);
+        }
     }
 }

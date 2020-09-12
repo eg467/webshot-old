@@ -1,6 +1,8 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
+using System.Linq;
 using System.Windows.Forms;
 using Webshot.Controls;
 using Webshot.Screenshots;
@@ -12,6 +14,8 @@ namespace Webshot
         public event EventHandler OptionsChanged;
 
         public event EventHandler ScreenshotSelected;
+
+        public event EventHandler SessionSelected;
 
         private ScreenshotFile _selectedImage;
 
@@ -34,7 +38,6 @@ namespace Webshot
                 OnScreenshotSelected();
             }
         }
-
 
         public Image DisplayedImage
         {
@@ -92,6 +95,24 @@ namespace Webshot
             }
         }
 
+        public IEnumerable<string> SessionIds
+        {
+            get => this.comboResultSets.Items.Cast<string>().ToArray();
+            set
+            {
+                this.comboResultSets.Items.Clear();
+                string[] options = value.OrderByDescending(x => x).ToArray();
+                this.comboResultSets.Items.AddRange(options);
+                SelectedSession = options.FirstOrDefault();
+            }
+        }
+
+        public string SelectedSession
+        {
+            get => this.comboResultSets.SelectedItem as string;
+            set => this.comboResultSets.SelectedItem = value;
+        }
+
         protected void OnOptionsChanged()
         {
             OptionsChanged?.Invoke(this, EventArgs.Empty);
@@ -102,16 +123,9 @@ namespace Webshot
             ScreenshotSelected?.Invoke(this, EventArgs.Empty);
         }
 
-        private ScreenshotResults _results = new ScreenshotResults();
-
-        public ScreenshotResults Results
+        protected void OnSessionSelected()
         {
-            get => _results;
-            set
-            {
-                _results = value;
-                this.treeScreenshots.SetResultSet(value);
-            }
+            SessionSelected?.Invoke(this, EventArgs.Empty);
         }
 
         public ViewResultsForm()
@@ -203,6 +217,16 @@ namespace Webshot
         private void TrackScrollSpeed_Scroll(object sender, EventArgs e)
         {
             this.imageViewer.AutoScrollImageSpeed = this.trackScrollSpeed.Value;
+        }
+
+        private void comboResultSets_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            OnSessionSelected();
+        }
+
+        public void ShowSessionScreenshots(ScreenshotResults results)
+        {
+            this.treeScreenshots.SetResultSet(results);
         }
     }
 }

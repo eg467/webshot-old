@@ -282,8 +282,9 @@ namespace Webshot
                 $"Webshot Project|{FileProjectStore.ProjectFilename}";
             if (DialogResult.OK == this.openProjectFileDialog.ShowDialog())
             {
-                var path = this.openProjectFileDialog.FileName;
-                var args = new ProjectFileEventArgs(path);
+                var projFilePath = this.openProjectFileDialog.FileName;
+                var projectDir = Path.GetDirectoryName(projFilePath);
+                var args = new ProjectFileEventArgs(projectDir);
                 OnLoadProject(args);
             }
         }
@@ -325,7 +326,7 @@ namespace Webshot
 
         private void BtnQuickCreateProject_Click(object sender, EventArgs e)
         {
-            var folder = FileProjectStore.CreateProjectDirectory(temporary: false);
+            var folder = FileProjectStore.CreateTempProjectDirectory(temporaryDir: false);
             var args = new ProjectFileEventArgs(folder);
             OnCreateProject(args);
         }

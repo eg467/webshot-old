@@ -25,9 +25,14 @@ namespace Webshot
             {
                 try
                 {
-                    Project = !string.IsNullOrEmpty(value)
-                    ? FileProjectStore.CreateOrLoadProject(value)
-                    : null;
+                    if (string.IsNullOrEmpty(value))
+                    {
+                        Project = null;
+                        return;
+                    }
+
+                    var store = new FileProjectStore(value);
+                    Project = store.ProjectExists ? store.Load() : store.Create();
                 }
                 catch (Exception ex)
                 {
@@ -40,11 +45,6 @@ namespace Webshot
         private readonly DebouncedProject _debouncedProject = new DebouncedProject();
 
         /// <summary>
-        /// The current project after all pending changes have been saved.
-        /// </summary>
-        private Project FlushedProject => _debouncedProject.FlushedProject;
-
-        /// <summary>
         /// The current project that may have unsaved changes.
         /// </summary>
         public Project Project
@@ -53,7 +53,7 @@ namespace Webshot
             private set
             {
                 _debouncedProject.Project = value;
-                if (ProjectStore?.IsSaved == false)
+                if (ProjectStore?.ProjectExists == false)
                 {
                     _debouncedProject.Save(true);
                 }
@@ -92,19 +92,6 @@ namespace Webshot
             Properties.Settings.Default.RecentProjects
                 .Cast<string>()
                 .Where(Directory.Exists);
-
-        private void CancelTask()
-        {
-            CancellationTokenSource?.Cancel();
-            CancellationTokenSource = null;
-        }
-
-        private void TemporarilyDisableUi(Action action)
-        {
-            Form.DisableUi = true;
-            action();
-            Form.DisableUi = false;
-        }
 
         private async Task TemporarilyDisableUiAsync(Func<Task> action)
         {
@@ -194,11 +181,10 @@ namespace Webshot
                      {
                          await ModifyProjectAsync(async p =>
                          {
-                             p.Output.CrawlResults = await spider.Crawl(token, _progress);
+                             p.CrawledPages = await spider.Crawl(token, _progress);
 
                              // Select all results by default.
-                             p.Input.SelectedUris =
-                                  Project.Output.CrawlResults.SitePages.ToList();
+                             p.Input.SelectedUris = p.CrawledPages.SitePages.ToList();
                          });
                      }
                      catch (OperationCanceledException)
@@ -228,40 +214,33 @@ namespace Webshot
                 };
 
                 using (var ss = new Screenshotter(
-                    ssOptions,
-                    Project.Output.CrawlResults?.BrokenLinks,
-                    Options.Credentials))
+                        ssOptions,
+                        Project.CrawledPages?.BrokenLinks,
+                        Options.Credentials))
                 {
                     int i = 0;
                     var count = Project.Input.SelectedUris.Count();
                     foreach (var uri in Project.Input.SelectedUris)
                     {
-                        try
+                        if (token.IsCancellationRequested)
                         {
-                            if (token.IsCancellationRequested)
-                            {
-                                MessageBox.Show("The screenshotting task was canceled.");
-                                return;
-                            }
+                            MessageBox.Show("The screenshotting task was canceled.");
+                            return;
+                        }
 
-                            _progress.Report(new TaskProgress
-                            {
-                                Count = count,
-                                CurrentIndex = ++i,
-                                CurrentItem = uri.AbsoluteUri
-                            });
-                            var result = new DeviceScreenshots(uri);
-                            await ScreenshotPageAsAllDevices(ss, uri, result);
-                            results.Screenshots.Add(result);
-                        }
-                        catch (Exception)
+                        _progress.Report(new TaskProgress
                         {
-                            throw;
-                        }
+                            Count = count,
+                            CurrentIndex = ++i,
+                            CurrentItem = uri.AbsoluteUri
+                        });
+                        var result = new DeviceScreenshots(uri);
+                        await ScreenshotPageAsAllDevices(ss, uri, result);
+                        results.Screenshots.Add(result);
                     }
                 }
 
-                ModifyProject(p => p.Output.Screenshots = results);
+                ProjectStore.SaveScreenshotManifest(Path.GetFileName(relImgDir), results);
 
                 stopwatch.Stop();
                 Debug.WriteLine($"Screenshots taken in {stopwatch.Elapsed.TotalSeconds} s");
@@ -269,17 +248,19 @@ namespace Webshot
                 // LOCAL FUNCTIONS
 
                 // Returns <relative, absolute> directory paths
-                Tuple<string, string> GetImageDir()
+                (string, string) GetImageDir()
                 {
-                    var basePath = Path.Combine(ProjectStore.ProjectDir, "Images");
+                    var basePath = Path.Combine(
+                        ProjectStore.ProjectDir,
+                        FileProjectStore.ScreenshotDir);
 
                     string absPath = ssOptions.StoreInTimestampedDir
                         ? Utils.CreateTimestampDirectory(basePath, createdAt)
-                        : basePath;
+                        : Path.Combine(basePath, "default");
 
                     string relPath = absPath.Replace(ProjectStore.ProjectDir, "");
 
-                    return new Tuple<string, string>(relPath, absPath);
+                    return (relPath, absPath);
                 }
 
                 void CreateImageDir(string dir)
@@ -322,7 +303,7 @@ namespace Webshot
                 {
                     var device = size.Key;
                     var width = size.Value;
-                    var baseName = Screenshotter.SanitizeFilename(url.ToString());
+                    var baseName = Utils.SanitizeFilename(url.ToString());
                     var filename = $"{baseName}.{device}{Screenshotter.ImageExtension}";
                     var relPath = Path.Combine(relImgDir, filename);
                     var absPath = Path.Combine(absImgDir, filename);
@@ -341,11 +322,6 @@ namespace Webshot
             });
         }
 
-        private CrawlResults CrawlResults => Project.Output.CrawlResults;
-
-        private IReadOnlyDictionary<Device, DeviceScreenshotOptions> GetDeviceOptions() =>
-            Options.ScreenshotOptions.DeviceOptions;
-
         private void LoadProject(string path = null)
         {
             ProjectDirectory = path
@@ -358,12 +334,10 @@ namespace Webshot
             ProjectStore.ProjectDir = path
                 ?? ProjectStore.ProjectDir
                 ?? Form.ChooseSaveFileDialog()
-                ?? FileProjectStore.CreateProjectDirectory(temporary: true);
+                ?? FileProjectStore.CreateTempProjectDirectory(temporaryDir: true);
 
             ProjectStore.Save(Project);
         }
-
-        private bool OnDisk => Directory.Exists(ProjectStore.ProjectDir);
 
         private void RefreshProjectUi()
         {
@@ -375,17 +349,18 @@ namespace Webshot
             Form.ProjectPath = ProjectDirectory;
             Form.ProjectName = Project.Name;
             Form.SpiderSeedUris = Project.Input.SpiderSeedUris;
-            Form.ScreenshotUris = Project.Output.CrawlResults.SitePages
+            Form.ScreenshotUris = Project.CrawledPages.SitePages
                 .Select(u => new Tuple<Uri, bool>(
                     u,
                     Project.Input.SelectedUris.Contains(u)));
 
-            Form.BrokenLinks = Project.Output.CrawlResults.BrokenLinks;
+            Form.BrokenLinks = Project.CrawledPages.BrokenLinks;
         }
 
         private void ViewScreenshots()
         {
-            var controller = new ViewResultsFormController(_debouncedProject);
+            Dictionary<string, ScreenshotResults> screenshots = ProjectStore.GetScreenshots();
+            var controller = new ViewResultsFormController(_debouncedProject, screenshots);
             var form = controller.CreateForm();
 
             form.ShowDialog(this.Form);
@@ -470,7 +445,7 @@ namespace Webshot
         {
             ProjectDirectory =
                 e.Path
-                ?? FileProjectStore.CreateProjectDirectory(temporary: false);
+                ?? FileProjectStore.CreateTempProjectDirectory(temporaryDir: false);
         }
 
         private void Form_SelectedUrisChanged(object sender, SelectedUrisChangedEventArgs e)

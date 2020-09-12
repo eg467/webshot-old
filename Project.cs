@@ -11,13 +11,10 @@ namespace Webshot
     {
         public string Name { get; set; } = "Webshot Project";
         public DateTime Created { get; set; } = DateTime.Now;
-        public bool IsSubproject { get; set; } = false;
         public Options Options { get; set; } = new Options();
         public ProjectInput Input { get; set; } = new ProjectInput();
-        public ProjectOutput Output { get; set; } = new ProjectOutput();
-
-        [JsonIgnore]
-        public IEnumerable<Project> Subprojects => Store.GetSubprojects();
+        public CrawlResults CrawledPages { get; set; } = new CrawlResults();
+        //public ProjectOutput Output { get; set; } = new ProjectOutput();
 
         [JsonIgnore]
         public IProjectStore Store { get; set; }
@@ -27,31 +24,17 @@ namespace Webshot
             Store = store;
         }
 
-        public void Save()
-        {
-            Store.Save(this);
-        }
-
-        public static Project Load(IProjectStore store) => store.Load();
+        public void Save() => Store.Save(this);
     }
 
+    /// <summary>
+    /// A project that will only save once during a delay period.
+    /// </summary>
     public class DebouncedProject
     {
         public event EventHandler Saved;
 
         public Project Project { get; set; }
-
-        /// <summary>
-        /// Returns a project that has all pending changes saved.
-        /// </summary>
-        public Project FlushedProject
-        {
-            get
-            {
-                Flush();
-                return Project;
-            }
-        }
 
         private readonly Debouncer _saveDebouncer;
 
@@ -61,6 +44,10 @@ namespace Webshot
             _saveDebouncer = new Debouncer(PerformSave, delay, maxSavesBeforeDisposal);
         }
 
+        /// <summary>
+        /// Persists the project.
+        /// </summary>
+        /// <param name="immediate">True to save regardless of the delay status.</param>
         public void Save(bool immediate = false)
         {
             if (immediate)
@@ -72,6 +59,9 @@ namespace Webshot
             _saveDebouncer.Call();
         }
 
+        /// <summary>
+        /// Saves the project immediately.
+        /// </summary>
         private void PerformSave()
         {
             Project?.Save();
@@ -84,15 +74,10 @@ namespace Webshot
         }
     }
 
-    public class ProjectOutput
-    {
-        /// <summary>
-        /// All recursively linked web pages and broken links.
-        /// </summary>
-        public CrawlResults CrawlResults { get; set; } = new CrawlResults();
-
-        public ScreenshotResults Screenshots { get; set; } = new ScreenshotResults();
-    }
+    //public class ProjectOutput
+    //{
+    //    public ScreenshotResults Screenshots { get; set; } = new ScreenshotResults();
+    //}
 
     public interface IObjectStore<T>
     {
@@ -103,8 +88,8 @@ namespace Webshot
 
     public interface IProjectStore : IObjectStore<Project>
     {
-        IEnumerable<Project> GetSubprojects();
-
         Image GetImage(ScreenshotFile file);
+
+        Dictionary<string, ScreenshotResults> GetScreenshots();
     }
 }

@@ -87,13 +87,6 @@ namespace Webshot
             }
         }
 
-        public static string SanitizeFilename(string filename)
-        {
-            var sanitized = System.Text.RegularExpressions.Regex.Replace(filename, "[^-a-zA-Z0-9]+", "_");
-            sanitized = System.Text.RegularExpressions.Regex.Replace(sanitized, "__+", "_");
-            return sanitized;
-        }
-
         /// <summary>
         /// Takes a screenshot of a web page.
         /// </summary>
@@ -114,6 +107,10 @@ namespace Webshot
             Thread.Sleep(screenshotDelay);
 
             var screenshot = _driver.GetScreenshot();
+
+            var dir = Path.GetDirectoryName(filePath);
+            Directory.CreateDirectory(dir);
+
             screenshot.SaveAsFile(filePath, _imageFormat);
             ClearResize();
             return filePath;

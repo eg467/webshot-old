@@ -5,19 +5,24 @@ using System.Linq;
 using System.Diagnostics;
 using System.IO;
 using Newtonsoft.Json;
+using System.Text.RegularExpressions;
 
 namespace Webshot
 {
     internal static class Utils
     {
+        public static string SanitizeFilename(string filename)
+        {
+            var sanitized = Regex.Replace(filename, "[^-a-zA-Z0-9]+", "_");
+            sanitized = Regex.Replace(sanitized, "__+", "_");
+            return sanitized;
+        }
+
         public static string CreateTimestampDirectory(
             string parentDir,
             DateTime? creationTimestamp = null)
         {
-            if (!Directory.Exists(parentDir))
-            {
-                throw new DirectoryNotFoundException($"'{parentDir}' does not exist.");
-            }
+            Directory.CreateDirectory(parentDir);
             string timestamp = (creationTimestamp ?? DateTime.Now).Timestamp();
             var origPath = Path.Combine(parentDir, timestamp);
             string uniquePath = MakeDirectoryNameUnique(origPath);

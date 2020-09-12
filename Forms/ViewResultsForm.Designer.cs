@@ -174,6 +174,7 @@
             this.comboResultSets.Name = "comboResultSets";
             this.comboResultSets.Size = new System.Drawing.Size(466, 32);
             this.comboResultSets.TabIndex = 0;
+            this.comboResultSets.SelectedIndexChanged += new System.EventHandler(this.comboResultSets_SelectedIndexChanged);
             // 
             // splitContainer1
             // 
