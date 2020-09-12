@@ -11,6 +11,11 @@ namespace Webshot
         private readonly TController _controller;
         private readonly Action<TForm> _initializer;
 
+        /// <summary>
+        /// Creates a controlled form.
+        /// </summary>
+        /// <param name="controller">The form's controller.</param>
+        /// <param name="initializer">An action to perform once the form loads.</param>
         public FormCreator(TController controller, Action<TForm> initializer = null)
         {
             _controller = controller;
@@ -19,11 +24,7 @@ namespace Webshot
 
         public TForm CreateForm()
         {
-            if (this.Form == null)
-            {
-                this.Form = Activator.CreateInstance<TForm>();
-            }
-
+            this.Form = this.Form ?? Activator.CreateInstance<TForm>();
             if (_initializer != null)
             {
                 this.Form.Load += FormLoaded;

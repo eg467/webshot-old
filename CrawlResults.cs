@@ -2,22 +2,20 @@
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
-using System.Net;
 
 namespace Webshot
 {
     [Serializable]
     public class CrawlResults
     {
-        public Dictionary<Uri, VisitationStatus> Uris { get; set; } 
+        public Dictionary<Uri, VisitationStatus> Uris { get; set; }
             = new Dictionary<Uri, VisitationStatus>();
 
-        public Dictionary<Uri, BrokenLink> BrokenLinks { get; set; }
-            = new Dictionary<Uri, BrokenLink>();
-        
+        public List<BrokenLink> BrokenLinks { get; set; } = new List<BrokenLink>();
+
         public DateTime Timestamp { get; set; } = DateTime.Now;
 
-        public CrawlResults(Dictionary<Uri, VisitationStatus> uris, Dictionary<Uri, BrokenLink> brokenLinks)
+        public CrawlResults(Dictionary<Uri, VisitationStatus> uris, List<BrokenLink> brokenLinks)
         {
             this.Uris = uris;
             this.BrokenLinks = brokenLinks;

@@ -49,19 +49,22 @@
             this.fileToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.pToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.btnNewProject = new System.Windows.Forms.ToolStripMenuItem();
+            this.btnQuickCreateProject = new System.Windows.Forms.ToolStripMenuItem();
+            this.btnCreateProject = new System.Windows.Forms.ToolStripMenuItem();
             this.btnOpenProject = new System.Windows.Forms.ToolStripMenuItem();
             this.btnSaveProject = new System.Windows.Forms.ToolStripMenuItem();
             this.btnViewProjectFolder = new System.Windows.Forms.ToolStripMenuItem();
             this.btnRecentProjects = new System.Windows.Forms.ToolStripMenuItem();
             this.btnExit = new System.Windows.Forms.ToolStripMenuItem();
             this.optionsToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.btnShowResults = new System.Windows.Forms.ToolStripMenuItem();
             this.btnCancelTask = new System.Windows.Forms.ToolStripMenuItem();
             this.pnlProject = new System.Windows.Forms.GroupBox();
+            this.lblProjectSaved = new System.Windows.Forms.Label();
             this.txtProjectName = new System.Windows.Forms.TextBox();
             this.lnkProjectLocation = new System.Windows.Forms.LinkLabel();
             this.folderOpenProject = new System.Windows.Forms.FolderBrowserDialog();
-            this.btnShowResults = new System.Windows.Forms.ToolStripMenuItem();
-            this.lblProjectSaved = new System.Windows.Forms.Label();
+            this.btnBrokenLinks = new System.Windows.Forms.Button();
             this.pnlCrawl.SuspendLayout();
             this.pnlSelectedPages.SuspendLayout();
             this.statusStrip1.SuspendLayout();
@@ -122,10 +125,11 @@
             // pnlSelectedPages
             // 
             this.pnlSelectedPages.Controls.Add(this.clbSelectedUris);
+            this.pnlSelectedPages.Controls.Add(this.btnBrokenLinks);
             this.pnlSelectedPages.Controls.Add(this.btnStartScreenshots);
             this.pnlSelectedPages.Location = new System.Drawing.Point(12, 438);
             this.pnlSelectedPages.Name = "pnlSelectedPages";
-            this.pnlSelectedPages.Size = new System.Drawing.Size(784, 428);
+            this.pnlSelectedPages.Size = new System.Drawing.Size(784, 495);
             this.pnlSelectedPages.TabIndex = 2;
             this.pnlSelectedPages.TabStop = false;
             this.pnlSelectedPages.Text = "Selected Pages";
@@ -135,15 +139,15 @@
             this.clbSelectedUris.CheckOnClick = true;
             this.clbSelectedUris.Dock = System.Windows.Forms.DockStyle.Fill;
             this.clbSelectedUris.FormattingEnabled = true;
-            this.clbSelectedUris.Location = new System.Drawing.Point(3, 25);
+            this.clbSelectedUris.Location = new System.Drawing.Point(3, 86);
             this.clbSelectedUris.Name = "clbSelectedUris";
-            this.clbSelectedUris.Size = new System.Drawing.Size(778, 329);
+            this.clbSelectedUris.Size = new System.Drawing.Size(778, 335);
             this.clbSelectedUris.TabIndex = 2;
             // 
             // btnStartScreenshots
             // 
             this.btnStartScreenshots.Dock = System.Windows.Forms.DockStyle.Bottom;
-            this.btnStartScreenshots.Location = new System.Drawing.Point(3, 354);
+            this.btnStartScreenshots.Location = new System.Drawing.Point(3, 421);
             this.btnStartScreenshots.Name = "btnStartScreenshots";
             this.btnStartScreenshots.Size = new System.Drawing.Size(778, 71);
             this.btnStartScreenshots.TabIndex = 1;
@@ -237,9 +241,26 @@
             // 
             // btnNewProject
             // 
+            this.btnNewProject.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
+            this.btnQuickCreateProject,
+            this.btnCreateProject});
             this.btnNewProject.Name = "btnNewProject";
             this.btnNewProject.Size = new System.Drawing.Size(349, 40);
             this.btnNewProject.Text = "New Project";
+            // 
+            // btnQuickCreateProject
+            // 
+            this.btnQuickCreateProject.Name = "btnQuickCreateProject";
+            this.btnQuickCreateProject.Size = new System.Drawing.Size(290, 40);
+            this.btnQuickCreateProject.Text = "Quick Create";
+            this.btnQuickCreateProject.Click += new System.EventHandler(this.BtnQuickCreateProject_Click);
+            // 
+            // btnCreateProject
+            // 
+            this.btnCreateProject.Name = "btnCreateProject";
+            this.btnCreateProject.Size = new System.Drawing.Size(290, 40);
+            this.btnCreateProject.Text = "Choose Directory";
+            this.btnCreateProject.Click += new System.EventHandler(this.BtnCreateProject_Click);
             // 
             // btnOpenProject
             // 
@@ -281,6 +302,13 @@
             this.optionsToolStripMenuItem.Text = "Options";
             this.optionsToolStripMenuItem.Click += new System.EventHandler(this.OptionsToolStripMenuItem_Click);
             // 
+            // btnShowResults
+            // 
+            this.btnShowResults.Name = "btnShowResults";
+            this.btnShowResults.Size = new System.Drawing.Size(152, 34);
+            this.btnShowResults.Text = "Show Results";
+            this.btnShowResults.Click += new System.EventHandler(this.BtnShowResults_Click);
+            // 
             // btnCancelTask
             // 
             this.btnCancelTask.Name = "btnCancelTask";
@@ -299,6 +327,17 @@
             this.pnlProject.TabIndex = 6;
             this.pnlProject.TabStop = false;
             this.pnlProject.Text = "Project";
+            // 
+            // lblProjectSaved
+            // 
+            this.lblProjectSaved.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(192)))), ((int)(((byte)(255)))), ((int)(((byte)(192)))));
+            this.lblProjectSaved.Location = new System.Drawing.Point(596, 16);
+            this.lblProjectSaved.Name = "lblProjectSaved";
+            this.lblProjectSaved.Size = new System.Drawing.Size(171, 52);
+            this.lblProjectSaved.TabIndex = 7;
+            this.lblProjectSaved.Text = "Project Saved.";
+            this.lblProjectSaved.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
+            this.lblProjectSaved.Visible = false;
             // 
             // txtProjectName
             // 
@@ -319,23 +358,18 @@
             this.lnkProjectLocation.Text = "Project Path";
             this.lnkProjectLocation.LinkClicked += new System.Windows.Forms.LinkLabelLinkClickedEventHandler(this.LnkProjectLocation_LinkClicked);
             // 
-            // btnShowResults
+            // btnBrokenLinks
             // 
-            this.btnShowResults.Name = "btnShowResults";
-            this.btnShowResults.Size = new System.Drawing.Size(152, 34);
-            this.btnShowResults.Text = "Show Results";
-            this.btnShowResults.Click += new System.EventHandler(this.btnShowResults_Click);
-            // 
-            // lblProjectSaved
-            // 
-            this.lblProjectSaved.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(192)))), ((int)(((byte)(255)))), ((int)(((byte)(192)))));
-            this.lblProjectSaved.Location = new System.Drawing.Point(596, 16);
-            this.lblProjectSaved.Name = "lblProjectSaved";
-            this.lblProjectSaved.Size = new System.Drawing.Size(171, 52);
-            this.lblProjectSaved.TabIndex = 7;
-            this.lblProjectSaved.Text = "Project Saved.";
-            this.lblProjectSaved.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
-            this.lblProjectSaved.Visible = false;
+            this.btnBrokenLinks.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(255)))), ((int)(((byte)(192)))), ((int)(((byte)(192)))));
+            this.btnBrokenLinks.Dock = System.Windows.Forms.DockStyle.Top;
+            this.btnBrokenLinks.Font = new System.Drawing.Font("Microsoft Sans Serif", 8.142858F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.btnBrokenLinks.Location = new System.Drawing.Point(3, 25);
+            this.btnBrokenLinks.Name = "btnBrokenLinks";
+            this.btnBrokenLinks.Size = new System.Drawing.Size(778, 61);
+            this.btnBrokenLinks.TabIndex = 3;
+            this.btnBrokenLinks.Text = "View Broken Links";
+            this.btnBrokenLinks.UseVisualStyleBackColor = false;
+            this.btnBrokenLinks.Click += new System.EventHandler(this.btnBrokenLinks_Click);
             // 
             // Form1
             // 
@@ -400,6 +434,9 @@
         private System.Windows.Forms.TextBox txtProjectName;
         private System.Windows.Forms.ToolStripMenuItem btnShowResults;
         private System.Windows.Forms.Label lblProjectSaved;
+        private System.Windows.Forms.ToolStripMenuItem btnQuickCreateProject;
+        private System.Windows.Forms.ToolStripMenuItem btnCreateProject;
+        private System.Windows.Forms.Button btnBrokenLinks;
     }
 }
 

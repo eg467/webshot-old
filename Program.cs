@@ -32,7 +32,11 @@ namespace Webshot
 
         private static Form1 CreateForm(string projectPath)
         {
-            projectPath = Path.GetDirectoryName(projectPath);
+            if (File.Exists(projectPath))
+            {
+                projectPath = Path.GetDirectoryName(projectPath);
+            }
+
             var frmController = new Form1Controller(projectPath);
             return frmController.CreateForm();
         }

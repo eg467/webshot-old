@@ -60,6 +60,7 @@ namespace Webshot.Controls
             this.screenshotTree1.Dock = System.Windows.Forms.DockStyle.Fill;
             this.screenshotTree1.Location = new System.Drawing.Point(0, 50);
             this.screenshotTree1.Name = "screenshotTree1";
+            this.screenshotTree1.SelectedFile = null;
             this.screenshotTree1.Size = new System.Drawing.Size(476, 1381);
             this.screenshotTree1.TabIndex = 4;
             this.screenshotTree1.ScreenshotSelected += new System.EventHandler(this.ScreenshotTree1_ScreenshotSelected);

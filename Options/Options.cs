@@ -1,6 +1,4 @@
-﻿using System;
-
-namespace Webshot
+﻿namespace Webshot
 {
     public class Options
     {

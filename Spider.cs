@@ -4,127 +4,153 @@ using System.Data;
 using System.Diagnostics;
 using System.Linq;
 using System.Net;
-using System.Reflection;
-using System.Runtime.Remoting;
-using System.Security.Policy;
+using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Text.RegularExpressions;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 
 namespace Webshot
 {
-    public sealed partial class Spider
+    public static class WebshotHttpClient
     {
-        private const bool AppendTrailingSlash = true;
+        private static readonly HttpClientHandler HttpClientHandler = new HttpClientHandler();
+        public static HttpClient Client { get; } = new HttpClient(HttpClientHandler);
 
-        private readonly Dictionary<Uri, VisitationStatus> _uris = new Dictionary<Uri, VisitationStatus>();
+        static WebshotHttpClient()
+        {
+            Client.DefaultRequestHeaders.UserAgent.Add(
+                new ProductInfoHeaderValue(nameof(Webshot), Application.ProductVersion));
+        }
 
-        /// <summary>
-        /// Keeps track of all link hrefs that point to a given URI.
-        /// (For better tracking of broken links.)
-        /// </summary>
-        private readonly Dictionary<Uri, HashSet<LinkSource>> _linkSources =
-            new Dictionary<Uri, HashSet<LinkSource>>();
+        public static void SetCredentials(ICredentials credentials)
+        {
+            HttpClientHandler.Credentials = credentials;
+        }
+    }
 
-        private readonly Dictionary<Uri, BrokenLink> _brokenLinks = new Dictionary<Uri, BrokenLink>();
-
+    public sealed class Spider : IDisposable
+    {
+        private readonly LinkTracker _linkTracker = new LinkTracker();
         private readonly List<Uri> _seedUris;
         private readonly SpiderOptions _options;
+        private readonly ICredentials _credentials;
 
-        public Spider(List<Uri> seedUris, SpiderOptions options)
+        public Spider(List<Uri> seedUris, SpiderOptions options, ProjectCredentials creds)
         {
             this._seedUris = seedUris;
             this._options = options;
+            SetHttpClientCredentials(creds);
         }
 
-        public CrawlResults Crawl(
-            IProgress<ParsingProgress> progress = null)
+        private void SetHttpClientCredentials(ProjectCredentials projectCreds)
         {
-            return Crawl(CancellationToken.None, progress);
-        }
-
-        public CrawlResults Crawl(
-            CancellationToken token,
-            IProgress<ParsingProgress> progress = null)
-        {
-            _linkSources.Clear();
-            _uris.Clear();
-            _brokenLinks.Clear();
-
-            _seedUris.ForEach(FoundLink);
-
-            while (TryNextUnvisited(out Uri unvisited))
+            var myCache = new CredentialCache();
+            projectCreds?.CredentialsByDomain?.ForEach(c =>
             {
+                var domainUrl =
+                    c.Key.Contains(Uri.SchemeDelimiter)
+                    ? c.Key : $"{Uri.UriSchemeHttps}{Uri.SchemeDelimiter}{c.Key}";
+                var uri = new Uri(domainUrl);
+                var creds = new NetworkCredential(c.Value.User, c.Value.Password);
+
+                myCache.Add(uri, "Basic", creds);
+            });
+            WebshotHttpClient.SetCredentials(myCache);
+        }
+
+        public async Task<CrawlResults> Crawl(
+            IProgress<TaskProgress> progress = null)
+        {
+            return await Crawl(CancellationToken.None, progress);
+        }
+
+        public async Task<CrawlResults> Crawl(
+            CancellationToken token,
+            IProgress<TaskProgress> progress = null)
+        {
+            _linkTracker.Clear();
+            _seedUris.Select(x => new Link(x, "")).ForEach(FoundLink);
+
+            while (_linkTracker.TryNextUnvisited(out StandardizedUri unvisited))
+            {
+                Debug.WriteLine($"Parsing {unvisited}");
+
                 if (token.IsCancellationRequested)
                 {
                     throw new OperationCanceledException();
                 }
 
-                progress?.Report(new ParsingProgress
+                progress?.Report(new TaskProgress
                 {
-                    CurrentItem = unvisited.ToString(),
-                    Count = _uris.Count,
-                    CurrentIndex = _uris.Count(u => u.Value != VisitationStatus.Unvisited)
+                    CurrentItem = unvisited.Standardized.ToString(),
+                    Count = _linkTracker.Count(),
+                    CurrentIndex = _linkTracker.Count(u => u.Status != VisitationStatus.Unvisited)
                 });
 
-                Visit(unvisited);
-
-                Application.DoEvents();
+                await Visit(unvisited);
             }
 
-            return new CrawlResults(_uris, _brokenLinks);
+            return _linkTracker.ToCrawlResults();
         }
 
-        private void Visit(Uri uri)
+        private async Task Visit(StandardizedUri uri)
         {
-            _uris[uri] = VisitationStatus.Visited;
+            UriSources sources = null;
+            string html = "";
+            try
+            {
+                (Uri finalUri, string content) = await DownloadPageAsync(uri.Standardized);
+                html = content;
+                sources = _linkTracker.Redirect(uri, finalUri);
+            }
+            catch (HttpRequestException ex)
+            {
+                sources = _linkTracker.GetOrCreateSources(uri);
+                sources.Status = VisitationStatus.Error;
+                sources.Error = ex.Message;
+                Debug.WriteLine($"Error downloading page ({uri}): {ex.Message}");
+            }
 
-            // Don't recursively follow external links.
-            // This will explode the URL list's size.
-            if (!IsTrackedHost(uri))
+            if (sources.Status != VisitationStatus.Unvisited)
             {
                 return;
             }
 
-            using (var client = new WebClient())
+            if (!ContentValid(html))
             {
-                try
-                {
-                    var html = client.DownloadString(uri);
-                    if (html.IndexOf("<html", StringComparison.OrdinalIgnoreCase) == -1)
-                    {
-                        Exclude(uri);
-                        return;
-                    }
-
-                    Regex.Matches(html, @"<a[^>]+href=""([^""]+)""", RegexOptions.IgnoreCase)
-                        .Cast<Match>()
-                        .Select(h => CreateUri(uri, h.Groups[1].Value))
-                        .ToList()
-                        .ForEach(FoundLink);
-                }
-                catch (WebException ex)
-                {
-                    RecordBrokenLink(uri, ex);
-                    Debug.WriteLine($"Error downloading page ({uri}): {ex.Message}");
-                    Exclude(uri);
-                }
+                sources.Status = VisitationStatus.Excluded;
+                return;
             }
+
+            sources.Status = VisitationStatus.Visited;
+            ParseLinks(sources.Uri.Uri, html)
+                .ForEach(FoundLink);
         }
 
-        private void RecordBrokenLink(Uri uri, WebException ex)
-        {
-            if (!_linkSources.TryGetValue(uri, out var sources))
-            {
-                sources = new HashSet<LinkSource>();
-            }
+        private static IEnumerable<Link> ParseLinks(Uri callingPage, string html) =>
+            Regex.Matches(html, @"<a[^>]+href=""([^""]+)""", RegexOptions.IgnoreCase)
+                .Cast<Match>()
+                .Select(h => new Link(callingPage, h.Groups[1].Value));
 
-            _brokenLinks[uri] = new BrokenLink
+        /// <summary>
+        /// Downloads the contents of a web page
+        /// </summary>
+        /// <param name="uri">The URI of the page to download</param>
+        /// <returns>A tuple of the Uri of the final page (after redirection), and its HTML contents.</returns>
+        private async Task<Tuple<Uri, string>> DownloadPageAsync(Uri uri)
+        {
+            using (HttpResponseMessage response = await WebshotHttpClient.Client.GetAsync(uri))
             {
-                ExceptionMessage = $"{ex.Message} ({ex.Status})",
-                Uri = uri,
-                Sources = sources,
-            };
+                var finalUri = response.RequestMessage.RequestUri;
+                response.EnsureSuccessStatusCode();
+                using (HttpContent content = response.Content)
+                {
+                    string result = await content.ReadAsStringAsync();
+                    return new Tuple<Uri, string>(finalUri, result);
+                }
+            }
         }
 
         private bool TrackedScheme(string scheme)
@@ -163,8 +189,35 @@ namespace Webshot
         /// </summary>
         /// <param name="uri"></param>
         /// <returns></returns>
-        private bool HardCodedValidUri(Uri uri) =>
-            !Regex.IsMatch(uri.ToString(), @"(\.(css|png)$)");
+        private bool HardCodedValidUri(Uri uri)
+        {
+            // Check if last three path segments repeat
+            // because WordPress can allow infinite recursion with poorly formed links.
+            // e.g. https://example.com/page/page/page/.../
+
+            // The maximum allowable number of repetitions at the end of the path.
+            var maxRecursionLevels = 2;
+
+            var recursionCheckDesired = maxRecursionLevels >= 1;
+            var illegalRecursionPossible = uri.Segments.Length > maxRecursionLevels + 1;
+
+            var hasRecursed =
+                recursionCheckDesired
+                && illegalRecursionPossible
+                && uri.Segments
+                    .Skip(uri.Segments.Length - maxRecursionLevels)
+                    .Select(s => s.TrimEnd('/'))
+                    .Unanimous();
+
+            var excludedProtocols = "tel|mailto";
+            var excludedExtensions = "css|png|pdf";
+
+            var isBlacklisted = Regex.IsMatch(
+                uri.ToString(),
+                $@"({excludedProtocols}|\.({excludedExtensions})$)");
+
+            return !hasRecursed && !isBlacklisted;
+        }
 
         /// <summary>
         /// Match project settings
@@ -175,104 +228,59 @@ namespace Webshot
             string.IsNullOrEmpty(_options.UriBlacklistPattern)
             || !Regex.IsMatch(uri.ToString(), _options.UriBlacklistPattern);
 
-        private bool TryNextUnvisited(out Uri uri)
+        private static bool ContentValid(string content)
         {
-            uri = _uris
-                .Where(x => x.Value == VisitationStatus.Unvisited)
-                .Select(x => x.Key)
-                .FirstOrDefault();
-            return uri != null;
+            return content.IndexOf("<html", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
-        private Uri CreateUri(Uri callingPage, string href)
+        private void FoundLink(Link link)
         {
-            // Record all hrefs associated with this Uri
-            var uri = new Uri(callingPage, href);
-            RecordLinkSource(callingPage, uri, href);
-            return uri;
-        }
+            var sources = _linkTracker.GetOrCreateSources(link.Target);
+            sources.CallingLinks.Add(link);
 
-        private void RecordLinkSource(Uri callingPage, Uri target, string linkHref)
-        {
-            callingPage = callingPage.TryStandardize();
-            target = target.TryStandardize();
-            if (!_linkSources.TryGetValue(target, out var sources))
+            if (sources.Status != VisitationStatus.Excluded
+                && !ShouldVisit(sources.Uri.Standardized))
             {
-                sources = new HashSet<LinkSource>();
-                _linkSources[target] = sources;
-            }
-            var source = new LinkSource
-            {
-                Href = linkHref,
-                CallingPage = callingPage
-            };
-            sources.Add(source);
-        }
-
-        private void FoundLink(Uri uri)
-        {
-            Uri standardizedUri = uri.TryStandardize();
-            if (!ShouldVisit(standardizedUri))
-            {
-                Exclude(standardizedUri);
-            }
-            else if (!_uris.ContainsKey(standardizedUri))
-            {
-                VisitLater(standardizedUri);
+                sources.Status = VisitationStatus.Excluded;
             }
         }
 
-        private void Exclude(Uri uri)
+        public void Dispose()
         {
-            _uris[uri] = VisitationStatus.Excluded;
-        }
-
-        private void VisitLater(Uri uri)
-        {
-            _uris[uri] = VisitationStatus.Unvisited;
+            WebshotHttpClient.SetCredentials(null);
         }
     }
 
-    public class ParsingProgress
+    public class TaskProgress
     {
         public int CurrentIndex { get; set; }
         public int Count { get; set; }
         public string CurrentItem { get; set; }
     }
 
-    public class BrokenLink
-    {
-        public string ExceptionMessage { get; set; }
-        public Uri Uri { get; set; }
-        public HashSet<LinkSource> Sources { get; set; }
-
-        public override bool Equals(object obj)
-        {
-            if (!(obj is BrokenLink link))
-            {
-                return false;
-            }
-            return Uri.Equals(link.Uri);
-        }
-
-        public override int GetHashCode() => Uri.GetHashCode();
-    }
-
-    public class LinkSource
+    public class Link
     {
         /// <summary>
         /// The page that references the broken link.
         /// </summary>
-        public Uri CallingPage { get; set; }
+        public Uri CallingPage { get; }
 
         /// <summary>
         /// The raw link in the anchor tag for finding the broken link sources.
         /// </summary>
-        public string Href { get; set; }
+        public string Href { get; }
+
+        public Uri Target => new Uri(CallingPage, Href);
+
+        public Link(Uri callingPage, string href)
+        {
+            this.CallingPage = callingPage;
+            this.Href = href;
+        }
 
         public override bool Equals(object obj)
         {
-            if (!(obj is LinkSource src))
+            if (!(obj is Link src))
             {
                 return false;
             }
@@ -284,8 +292,136 @@ namespace Webshot
             Utils.CombineHashCodes(CallingPage.GetHashCode(), Href.GetHashCode());
     }
 
+    public class StandardizedUri
+    {
+        public Uri Uri { get; }
+        public Uri Standardized { get; }
+
+        public StandardizedUri(Uri uri)
+        {
+            Uri = uri;
+            Standardized = uri.TryStandardize();
+        }
+
+        public override bool Equals(object obj) =>
+            Equals((obj as StandardizedUri)?.Standardized, Standardized);
+
+        public override int GetHashCode() => Standardized.GetHashCode();
+    }
+
     public enum VisitationStatus
     {
-        Visited, Unvisited, Excluded
+        Visited, Unvisited, Excluded, Redirected, Error
+    }
+
+    public class UriSources
+    {
+        public VisitationStatus Status { get; set; } = VisitationStatus.Unvisited;
+        public StandardizedUri Uri { get; set; }
+        public Uri RedirectedUri { get; set; }
+
+        public bool WasRedirected =>
+            RedirectedUri != null
+            && Equals(Uri, new StandardizedUri(RedirectedUri));
+
+        public string Error { get; set; }
+        public HashSet<Link> CallingLinks { get; set; } = new HashSet<Link>();
+
+        public UriSources(StandardizedUri uri)
+        {
+            this.Uri = uri;
+        }
+    }
+
+    public class BrokenLink
+    {
+        public Uri Target { get; set; }
+        public HashSet<Link> Sources { get; set; }
+        public string Error { get; set; }
+    }
+
+    public class LinkTracker
+    {
+        private readonly Dictionary<StandardizedUri, UriSources> _uris =
+            new Dictionary<StandardizedUri, UriSources>();
+
+        public int Count(Func<UriSources, bool> predicate = null) =>
+            predicate != null
+            ? _uris.Count(x => predicate(x.Value))
+            : _uris.Count();
+
+        public bool Contains(StandardizedUri uri) => _uris.ContainsKey(uri);
+
+        public void Clear()
+        {
+            _uris.Clear();
+        }
+
+        public CrawlResults ToCrawlResults() => new CrawlResults(ByStatus, BrokenLinks);
+
+        public List<BrokenLink> BrokenLinks =>
+            _uris
+            .Where(x => x.Value.Status == VisitationStatus.Error)
+            .Select(x => new BrokenLink()
+            {
+                Error = x.Value.Error,
+                Target = x.Key.Standardized,
+                Sources = x.Value.CallingLinks
+            })
+            .ToList();
+
+        public Dictionary<Uri, VisitationStatus> ByStatus =>
+            _uris
+            .ToDictionary(x => x.Key.Standardized, x => x.Value.Status);
+
+        public List<Uri> AvailableWebPages() =>
+            _uris
+            .Where(x => x.Value.Status == VisitationStatus.Visited)
+            .Select(x => x.Key.Standardized)
+            .ToList();
+
+        public UriSources GetOrCreateSources(Uri uri) =>
+            GetOrCreateSources(new StandardizedUri(uri));
+
+        public UriSources GetOrCreateSources(StandardizedUri uri)
+        {
+            if (!_uris.TryGetValue(uri, out var sources))
+            {
+                sources = new UriSources(uri);
+                _uris[uri] = sources;
+            }
+            return sources;
+        }
+
+        public UriSources Redirect(StandardizedUri sourceUri, Uri redirectionTarget)
+        {
+            var src = GetOrCreateSources(sourceUri);
+            var stdDestUri = new StandardizedUri(redirectionTarget);
+            src.RedirectedUri = redirectionTarget;
+
+            if (sourceUri.Equals(stdDestUri))
+            {
+                // Not a meaningful redirection
+                return src;
+            }
+
+            src.Status = VisitationStatus.Redirected;
+
+            var dest = GetOrCreateSources(stdDestUri);
+            var combinedLinks = src.CallingLinks.Union(dest.CallingLinks).ToHashSet();
+            src.CallingLinks = combinedLinks;
+            dest.CallingLinks = combinedLinks;
+
+            return dest;
+        }
+
+        public bool TryNextUnvisited(out StandardizedUri uri)
+        {
+            uri = _uris
+                .Where(x => x.Value.Status == VisitationStatus.Unvisited)
+                .Select(x => x.Key)
+                .FirstOrDefault();
+            return uri != null;
+        }
     }
 }

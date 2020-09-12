@@ -1,11 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Runtime.Remoting.Metadata;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Windows.Forms;
-using System.Windows.Forms.VisualStyles;
 using Webshot.Forms;
 
 namespace Webshot
@@ -23,9 +23,17 @@ namespace Webshot
             get => ProjectStore?.ProjectDir;
             set
             {
-                Project = !string.IsNullOrEmpty(value)
+                try
+                {
+                    Project = !string.IsNullOrEmpty(value)
                     ? FileProjectStore.CreateOrLoadProject(value)
                     : null;
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show("There was an error loading your project: " + ex.Message);
+                    throw;
+                }
             }
         }
 
@@ -81,7 +89,9 @@ namespace Webshot
         }
 
         private static IEnumerable<string> GetRecentProjects() =>
-            Properties.Settings.Default.RecentProjects.Cast<string>();
+            Properties.Settings.Default.RecentProjects
+                .Cast<string>()
+                .Where(Directory.Exists);
 
         private void CancelTask()
         {
@@ -96,31 +106,35 @@ namespace Webshot
             Form.DisableUi = false;
         }
 
+        private async Task TemporarilyDisableUiAsync(Func<Task> action)
+        {
+            Form.DisableUi = true;
+            await action();
+            Form.DisableUi = false;
+        }
+
         private bool TaskInProgress => Form.DisableUi;
 
         public Form1Controller(string projectDir = null)
         {
+            _progress = new Progress<TaskProgress>(p =>
+            {
+                Form?.UpdateProgress(p);
+            });
             _formCreator = new FormCreator<Form1, Form1Controller>(this);
             _debouncedProject.Saved += (s, e) => Form.FlashProjectSaved();
             ProjectDirectory = projectDir;
         }
 
-        private void CreateChromeExtensions()
-        {
-            var creds = Options?.Credentials?.CredentialsByDomain;
-            if (creds == null)
-            {
-                return;
-            }
-
-            creds.ForEach(x =>
-            {
-            });
-        }
-
         private void ModifyProject(Action<Project> fn, bool saveImmediately = true)
         {
             fn(Project);
+            _debouncedProject.Save(saveImmediately);
+        }
+
+        private async Task ModifyProjectAsync(Func<Project, Task> fn, bool saveImmediately = true)
+        {
+            await fn(Project);
             _debouncedProject.Save(saveImmediately);
         }
 
@@ -139,159 +153,192 @@ namespace Webshot
         }
 
         /// <summary>
+        /// Performs an action that can be cancelled.
+        /// </summary>
+        /// <remarks>Not thread safe.</remarks>
+        /// <param name="fn"></param>
+        private async Task CancellableActionAsync(Func<CancellationToken, Task> fn)
+        {
+            using (CancellationTokenSource = new CancellationTokenSource())
+            {
+                await fn(CancellationTokenSource.Token);
+            }
+            CancellationTokenSource = null;
+        }
+
+        public IProgress<TaskProgress> _progress;
+
+        /// <summary>
         ///
         /// </summary>
         /// <exception cref="OperationCanceledException"></exception>
-        private void Crawl()
+        private async Task Crawl()
         {
             ModifyProject(p => p.Input.SpiderSeedUris = Form.SpiderSeedUris.ToList());
 
             var spiderSeedUris = Project.Input.SpiderSeedUris;
             var spiderOptions = Options.SpiderOptions;
+            var creds = Options.Credentials;
             var initialUris = Project.Input.SpiderSeedUris;
             if (initialUris?.Any() != true)
             {
                 throw new InvalidOperationException("You must provide seed URIs to crawl.");
             }
 
-            TemporarilyDisableUi(() =>
-                CancellableAction(token =>
-                {
-                    IProgress<ParsingProgress> progress = new Progress<ParsingProgress>(p =>
-                    {
-                        Form.UpdateProgress(p);
-                    });
-                    var spider = new Spider(initialUris, spiderOptions);
+            await TemporarilyDisableUiAsync(async () =>
+                await CancellableActionAsync(async token =>
+                 {
+                     var spider = new Spider(initialUris, spiderOptions, creds);
 
-                    try
-                    {
-                        ModifyProject(p =>
-                        {
-                            p.Output.CrawlResults = spider.Crawl(token, progress);
+                     try
+                     {
+                         await ModifyProjectAsync(async p =>
+                         {
+                             p.Output.CrawlResults = await spider.Crawl(token, _progress);
 
-                            // Select all results by default.
-                            p.Input.SelectedUris =
-                                Project.Output.CrawlResults.SitePages.ToList();
-                        });
-                    }
-                    catch (OperationCanceledException)
-                    {
-                        MessageBox.Show("The operation has been cancelled.");
-                    }
-                    //catch (Exception ex)
-                    //{
-                    //    MessageBox.Show(
-                    //        ex.Message,
-                    //        "Error",
-                    //        MessageBoxButtons.OK,
-                    //        MessageBoxIcon.Error);
-                    //    throw;
-                    //}
-                })
+                             // Select all results by default.
+                             p.Input.SelectedUris =
+                                  Project.Output.CrawlResults.SitePages.ToList();
+                         });
+                     }
+                     catch (OperationCanceledException)
+                     {
+                         MessageBox.Show("The operation has been cancelled.");
+                     }
+                 })
             );
 
             RefreshProjectUi();
         }
 
-        private void TakeScreenshots()
+        private async Task TakeScreenshots()
         {
-            ModifyProject(p => p.Input.SelectedUris = Form.SelectedUris.ToList());
-
-            var ssOptions = Options.ScreenshotOptions;
-            var createdAt = DateTime.Now;
-            (string relImgDir, string absImgDir) = GetImageDir();
-            CreateImageDir(absImgDir);
-            var results = new ScreenshotResults
+            await CancellableActionAsync(async token =>
             {
-                Timestamp = createdAt,
-            };
+                var stopwatch = Stopwatch.StartNew();
+                ModifyProject(p => p.Input.SelectedUris = Form.SelectedUris.ToList());
 
-            using (var ss = new Screenshotter())
-            {
-                foreach (var uri in Project.Input.SelectedUris)
+                var ssOptions = Options.ScreenshotOptions;
+                var createdAt = DateTime.Now;
+                (string relImgDir, string absImgDir) = GetImageDir();
+                CreateImageDir(absImgDir);
+                var results = new ScreenshotResults
                 {
+                    Timestamp = createdAt,
+                };
+
+                using (var ss = new Screenshotter(
+                    ssOptions,
+                    Project.Output.CrawlResults?.BrokenLinks,
+                    Options.Credentials))
+                {
+                    int i = 0;
+                    var count = Project.Input.SelectedUris.Count();
+                    foreach (var uri in Project.Input.SelectedUris)
+                    {
+                        try
+                        {
+                            if (token.IsCancellationRequested)
+                            {
+                                MessageBox.Show("The screenshotting task was canceled.");
+                                return;
+                            }
+
+                            _progress.Report(new TaskProgress
+                            {
+                                Count = count,
+                                CurrentIndex = ++i,
+                                CurrentItem = uri.AbsoluteUri
+                            });
+                            var result = new DeviceScreenshots(uri);
+                            await ScreenshotPageAsAllDevices(ss, uri, result);
+                            results.Screenshots.Add(result);
+                        }
+                        catch (Exception)
+                        {
+                            throw;
+                        }
+                    }
+                }
+
+                ModifyProject(p => p.Output.Screenshots = results);
+
+                stopwatch.Stop();
+                Debug.WriteLine($"Screenshots taken in {stopwatch.Elapsed.TotalSeconds} s");
+
+                // LOCAL FUNCTIONS
+
+                // Returns <relative, absolute> directory paths
+                Tuple<string, string> GetImageDir()
+                {
+                    var basePath = Path.Combine(ProjectStore.ProjectDir, "Images");
+
+                    string absPath = ssOptions.StoreInTimestampedDir
+                        ? Utils.CreateTimestampDirectory(basePath, createdAt)
+                        : basePath;
+
+                    string relPath = absPath.Replace(ProjectStore.ProjectDir, "");
+
+                    return new Tuple<string, string>(relPath, absPath);
+                }
+
+                void CreateImageDir(string dir)
+                {
+                    if (Directory.Exists(dir))
+                    {
+                        var numExistingFiles = Directory.GetFiles(dir).Count();
+                        if (!Form.ConfirmOverwriteImages(numExistingFiles))
+                        {
+                            return;
+                        }
+                        Directory.Delete(dir, true);
+                    }
+                    Directory.CreateDirectory(dir);
+                }
+
+                async Task ScreenshotPageAsAllDevices(
+                    Screenshotter ss,
+                    Uri url,
+                    DeviceScreenshots result)
+                {
+                    var sizes = Options.ScreenshotOptions.DeviceOptions
+                        .Where(x => x.Value.Enabled && x.Value.DisplayWidthInPixels > 0)
+                        .Select(x =>
+                            new KeyValuePair<Device, int>(
+                                x.Key,
+                                x.Value.DisplayWidthInPixels));
+
+                    foreach (var size in sizes)
+                    {
+                        await ScreenshotPageAsDeviceAsync(ss, url, result, size);
+                    }
+                }
+
+                async Task ScreenshotPageAsDeviceAsync(
+                    Screenshotter ss,
+                    Uri url,
+                    DeviceScreenshots result,
+                    KeyValuePair<Device, int> size)
+                {
+                    var device = size.Key;
+                    var width = size.Value;
+                    var baseName = Screenshotter.SanitizeFilename(url.ToString());
+                    var filename = $"{baseName}.{device}{Screenshotter.ImageExtension}";
+                    var relPath = Path.Combine(relImgDir, filename);
+                    var absPath = Path.Combine(absImgDir, filename);
+
                     try
                     {
-                        var result = new DeviceScreenshots(uri);
-                        ScreenshotPageAsAllDevices(ss, uri, result);
-                        results.Screenshots.Add(result);
+                        await Task.Run(
+                            () => ss.TakeScreenshot(url.ToString(), absPath, width));
+                        result.Paths.Add(device, relPath);
                     }
-                    catch (Exception)
+                    catch (Exception ex)
                     {
-                        throw;
+                        result.Error += ex.Message + Environment.NewLine;
                     }
                 }
-            }
-
-            ModifyProject(p => p.Output.Screenshots = results);
-
-            // LOCAL FUNCTIONS
-
-            // Returns <relative, absolute> directory paths
-            Tuple<string, string> GetImageDir()
-            {
-                var basePath = Path.Combine(ProjectStore.ProjectDir, "Images");
-
-                string absPath = ssOptions.StoreInTimestampedDir
-                    ? Utils.CreateTimestampDirectory(basePath, createdAt)
-                    : basePath;
-
-                string relPath = absPath.Replace(ProjectStore.ProjectDir, "");
-
-                return new Tuple<string, string>(relPath, absPath);
-            }
-
-            void CreateImageDir(string dir)
-            {
-                if (Directory.Exists(dir))
-                {
-                    var numExistingFiles = Directory.GetFiles(dir).Count();
-                    if (!Form.ConfirmOverwriteImages(numExistingFiles))
-                    {
-                        return;
-                    }
-                    Directory.Delete(dir, true);
-                }
-                Directory.CreateDirectory(dir);
-            }
-
-            void ScreenshotPageAsAllDevices(
-                Screenshotter ss,
-                Uri url,
-                DeviceScreenshots result)
-            {
-                Options.ScreenshotOptions.DeviceOptions
-                    .Where(x => x.Value.Enabled && x.Value.DisplayWidthInPixels > 0)
-                    .Select(x =>
-                        new KeyValuePair<Device, int>(
-                            x.Key,
-                            x.Value.DisplayWidthInPixels))
-                    .ForEach(size => ScreenshotPageAsDevice(ss, url, result, size));
-            }
-
-            void ScreenshotPageAsDevice(
-                Screenshotter ss,
-                Uri url,
-                DeviceScreenshots result,
-                KeyValuePair<Device, int> size)
-            {
-                var device = size.Key;
-                var width = size.Value;
-                var baseName = Screenshotter.SanitizeFilename(url.ToString());
-                var filename = $"{baseName}.{device}{Screenshotter.ImageExtension}";
-                var relPath = Path.Combine(relImgDir, filename);
-                var absPath = Path.Combine(absImgDir, filename);
-
-                try
-                {
-                    ss.TakeScreenshot(url.ToString(), absPath, width);
-                    result.Paths.Add(device, relPath);
-                }
-                catch (Exception ex)
-                {
-                    result.Error += ex.Message + Environment.NewLine;
-                }
-            }
+            });
         }
 
         private CrawlResults CrawlResults => Project.Output.CrawlResults;
@@ -332,6 +379,8 @@ namespace Webshot
                 .Select(u => new Tuple<Uri, bool>(
                     u,
                     Project.Input.SelectedUris.Contains(u)));
+
+            Form.BrokenLinks = Project.Output.CrawlResults.BrokenLinks;
         }
 
         private void ViewScreenshots()
@@ -359,10 +408,7 @@ namespace Webshot
 
         private void WireFormEvents()
         {
-            if (Form == null)
-            {
-                return;
-            }
+            if (Form == null) return;
 
             Form.Load += Form_Load;
             Form.CreateProject += Form_CreateProject;
@@ -379,10 +425,7 @@ namespace Webshot
 
         private void UnwireFormEvents()
         {
-            if (Form == null)
-            {
-                return;
-            }
+            if (Form == null) return;
 
             Form.Load -= Form_Load;
             Form.CreateProject -= Form_CreateProject;
@@ -403,14 +446,14 @@ namespace Webshot
             Form.RefreshRecentProjects(GetRecentProjects());
         }
 
-        private void Form_ScreenshotRequest(object sender, EventArgs e)
+        private async void Form_ScreenshotRequest(object sender, EventArgs e)
         {
-            TakeScreenshots();
+            await TakeScreenshots();
         }
 
-        private void Form_SiteCrawlRequest(object sender, EventArgs e)
+        private async void Form_SiteCrawlRequest(object sender, EventArgs e)
         {
-            Crawl();
+            await Crawl();
         }
 
         private void Form_SaveProject(object sender, EventArgs e)

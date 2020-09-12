@@ -1,14 +1,7 @@
-﻿using Newtonsoft.Json;
-using System;
-using System.Collections.Generic;
-using System.Data;
+﻿using System;
 using System.Diagnostics;
 using System.Drawing;
-using System.IO;
-using System.Linq;
-using System.Net.NetworkInformation;
 using System.Windows.Forms;
-using System.Windows.Markup;
 using Webshot.Controls;
 using Webshot.Screenshots;
 
@@ -36,10 +29,12 @@ namespace Webshot
                     return;
                 }
                 _selectedImage = value;
+                this.lnkUrl.Text = value?.Result?.Uri?.ToString() ?? "";
                 RefreshZoomForCurrentDevice();
                 OnScreenshotSelected();
             }
         }
+
 
         public Image DisplayedImage
         {

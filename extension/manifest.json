@@ -1,0 +1,1 @@
+{ "name":"Webrequest API", "version":"1.0", "description":"Extension to handle Authentication window", "permissions":["","webRequest","webRequestBlocking"], "background": { "scripts" : ["webrequest.js"] }, "manifest_version": 2 }

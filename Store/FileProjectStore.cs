@@ -4,8 +4,6 @@ using System.Collections.Specialized;
 using System.Drawing;
 using System.IO;
 using System.Linq;
-using Webshot.Controls;
-using Webshot.Forms;
 using Webshot.Screenshots;
 
 namespace Webshot
@@ -108,11 +106,9 @@ namespace Webshot
         {
             Utils.ChangeSettings(s =>
             {
-                var recentProjects =
-                    s.RecentProjects ?? new StringCollection();
-
+                var recentProjects = s.RecentProjects ?? new StringCollection();
                 recentProjects.Remove(this.ProjectDir);
-                recentProjects.Add(this.ProjectDir);
+                recentProjects.Insert(0, this.ProjectDir);
                 s.RecentProjects = recentProjects;
             });
         }

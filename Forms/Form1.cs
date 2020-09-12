@@ -1,10 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Security.Cryptography.X509Certificates;
 using System.Windows.Forms;
+using Webshot.Forms;
 
 namespace Webshot
 {
@@ -78,6 +77,16 @@ namespace Webshot
             set
             {
                 this.txtSpiderSeedUris.Text = string.Join(Environment.NewLine, value);
+            }
+        }
+
+        public List<BrokenLink> BrokenLinks
+        {
+            get => this.btnBrokenLinks.Tag as List<BrokenLink>;
+            set
+            {
+                this.btnBrokenLinks.Tag = value ?? new List<BrokenLink>();
+                this.btnBrokenLinks.Visible = value.Any();
             }
         }
 
@@ -229,32 +238,19 @@ namespace Webshot
             OnSiteCrawlRequest();
         }
 
-        public void UpdateProgress(ParsingProgress progress)
+        public void UpdateProgress(TaskProgress progress)
         {
-            this.progressBar.Maximum = progress.Count;
-            this.progressBar.Value = progress.CurrentIndex + 1;
-            this.lblStatus.Text = progress.CurrentItem;
-        }
-
-        public void SelectPages()
-        {
-            //var frm = new ChoosePagesForm(.CrawlResults);
-            //if (DialogResult.OK != frm.ShowDialog(this))
-            //{
-            //    return;
-            //}
-            //this.txtSelectedPages.Text =
-            //    string.Join(Environment.NewLine, frm.IncludedPages);
+            Invoke((Action)(() =>
+            {
+                this.progressBar.Maximum = progress.Count;
+                this.progressBar.Value = progress.CurrentIndex;
+                this.lblStatus.Text = progress.CurrentItem;
+            }));
         }
 
         private void BtnStartScreenshots_Click(object sender, EventArgs e)
         {
             OnScreenshotRequest();
-        }
-
-        private void BtnViewResults_Click(object sender, EventArgs e)
-        {
-            //Controller.ViewScreenshots();
         }
 
         private void BtnCancel_Click(object sender, EventArgs e)
@@ -322,9 +318,33 @@ namespace Webshot
             OnProjectNameChanged();
         }
 
-        private void btnShowResults_Click(object sender, EventArgs e)
+        private void BtnShowResults_Click(object sender, EventArgs e)
         {
             OnShowResults();
+        }
+
+        private void BtnQuickCreateProject_Click(object sender, EventArgs e)
+        {
+            var folder = FileProjectStore.CreateProjectDirectory(temporary: false);
+            var args = new ProjectFileEventArgs(folder);
+            OnCreateProject(args);
+        }
+
+        private void BtnCreateProject_Click(object sender, EventArgs e)
+        {
+            string folder = ChooseProjectFolder();
+            if (folder != null)
+            {
+                var args = new ProjectFileEventArgs(folder);
+                OnCreateProject(args);
+            }
+        }
+
+        private void btnBrokenLinks_Click(object sender, EventArgs e)
+        {
+            var frm = new BrokenLinksForm();
+            frm.UpdateLinks(BrokenLinks);
+            frm.ShowDialog();
         }
     }
 

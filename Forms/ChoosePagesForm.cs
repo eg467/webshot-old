@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
-using System.Net;
 using System.Windows.Forms;
 
 namespace Webshot
@@ -10,7 +9,7 @@ namespace Webshot
     public partial class ChoosePagesForm : Form
     {
         private readonly Dictionary<Uri, bool> _pages;
-        private readonly IReadOnlyDictionary<Uri, BrokenLink> _brokenLinks;
+        private readonly List<BrokenLink> _brokenLinks;
 
         public IEnumerable<Uri> IncludedPages =>
             _pages.Where(p => p.Value)
@@ -46,8 +45,8 @@ namespace Webshot
             _brokenLinks
            .Select(x => new
            {
-               Uri = x.Key,
-               x.Value.ExceptionMessage
+               Uri = x.Target,
+               x.Error
            })
            .ForEach(x =>
            {
@@ -59,10 +58,10 @@ namespace Webshot
 
                var lblMessage = new Label()
                {
-                   Text = x.ExceptionMessage
+                   Text = x.Error
                };
 
-               var lvi = new ListViewItem(new string[] { x.Uri.ToString(), x.ExceptionMessage });
+               var lvi = new ListViewItem(new string[] { x.Uri.ToString(), x.Error });
                this.lvErrors.Items.Add(lvi);
            });
         }

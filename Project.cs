@@ -1,10 +1,7 @@
 ﻿using Newtonsoft.Json;
 using System;
-using System.CodeDom;
 using System.Collections.Generic;
 using System.Drawing;
-using System.IO;
-using Webshot.Controls;
 using Webshot.Forms;
 using Webshot.Screenshots;
 

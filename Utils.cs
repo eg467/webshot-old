@@ -161,6 +161,15 @@ namespace Webshot
             }
         }
 
+        public static bool Unanimous<T>(this IEnumerable<T> items)
+        {
+            if (!items.Any()) return true;
+            var comparer = EqualityComparer<T>.Default;
+            var first = items.First();
+            bool MatchesFirst(T item) => comparer.Equals(first, item);
+            return items.Skip(1).All(MatchesFirst);
+        }
+
         /// <summary>
         /// Returns a new Uri with minor differences (e.g. fragment) removed or null.
         /// </summary>
@@ -180,7 +189,7 @@ namespace Webshot
                 && !lastSegment.EndsWith("/");
 
             string trailingSlash = addSlash ? "/" : "";
-            return new Uri($"{uri.Scheme}://{uri.Host}{uri.AbsolutePath}{trailingSlash}{uri.Query}");
+            return new Uri($"{uri.Scheme}{Uri.SchemeDelimiter}{uri.Authority}{uri.AbsolutePath}{trailingSlash}{uri.Query}");
         }
 
         /// <summary>
@@ -192,11 +201,13 @@ namespace Webshot
         {
             try
             {
-                return uri.Standardize();
+                return uri.Scheme.StartsWith(Uri.UriSchemeHttp)
+                    ? uri.Standardize()
+                    : uri;
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"Error parsing URI: {ex.Message}");
+                Debug.WriteLine($"Error parsing URI {uri}: {ex.Message}");
                 return uri;
             }
         }

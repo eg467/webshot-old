@@ -1,15 +1,10 @@
 ﻿using OpenQA.Selenium;
 using OpenQA.Selenium.Chrome;
-using OpenQA.Selenium.Remote;
 using System;
 using System.Collections.Generic;
-using System.Data.SqlTypes;
-using System.Diagnostics;
-using System.Drawing.Text;
 using System.IO;
 using System.Linq;
-using System.Threading.Tasks;
-using System.Windows.Forms;
+using System.Threading;
 
 namespace Webshot
 {
@@ -23,28 +18,73 @@ namespace Webshot
         public static readonly string ImageExtension = $".{_imageFormat.ToString().ToLower()}";
 
         private readonly ChromeDriver _driver;
-        private readonly ScreenshotterOptions _options;
+        private readonly ScreenshotOptions _options;
+        private readonly Dictionary<Uri, BrokenLink> _brokenLinks;
+        private readonly ProjectCredentials _projectCredentials;
 
-        public Screenshotter(ScreenshotterOptions options)
+        public Screenshotter(
+            ScreenshotOptions options,
+            IEnumerable<BrokenLink> brokenLinks,
+            ProjectCredentials projectCredentials)
         {
-            _driver = CreateDriver();
             _options = options;
+            _brokenLinks = brokenLinks.ToDictionary(x => x.Target, x => x);
+            _projectCredentials = projectCredentials;
+            _driver = CreateDriver();
         }
 
-        public Screenshotter() : this(new ScreenshotterOptions())
+        public Screenshotter() : this(
+            new ScreenshotOptions(),
+            new List<BrokenLink>(),
+            new ProjectCredentials())
         {
         }
 
         public void Dispose()
         {
+            if (File.Exists(AuthExtensionPath))
+            {
+                File.Delete(AuthExtensionPath);
+            }
             _driver.Close();
             _driver.Dispose();
         }
 
         private ChromeDriver CreateDriver()
         {
-            var driver = new ChromeDriver();
+            var options = new ChromeOptions();
+            CreateAuthExtensionIfNeeded(options);
+            var driver = new ChromeDriver(options);
             return driver;
+        }
+
+        private const string AuthExtensionPath = "authextension.zip";
+        private bool _extensionLoaded;
+
+        /// <summary>
+        /// <para>Creates an extension that handles basic authentication.</para>
+        /// <para>WARNING: this will store usernames and passwords in plaintext</para>
+        /// </summary>
+        /// <param name="options"></param>
+        private void CreateAuthExtensionIfNeeded(ChromeOptions options)
+        {
+            using (var ext = new ChromeAuthExtension(_projectCredentials, "temp-extension-files"))
+            {
+                if (!ext.IsNeeded)
+                {
+                    _extensionLoaded = false;
+                    return;
+                }
+
+                if (File.Exists(AuthExtensionPath))
+                {
+                    File.Delete(AuthExtensionPath);
+                }
+                ext.CreateZip(AuthExtensionPath);
+                options.AddArguments("--no-sandbox");
+                options.AddExtensions(AuthExtensionPath);
+                _extensionLoaded = true;
+            }
         }
 
         public static string SanitizeFilename(string filename)
@@ -54,6 +94,13 @@ namespace Webshot
             return sanitized;
         }
 
+        /// <summary>
+        /// Takes a screenshot of a web page.
+        /// </summary>
+        /// <param name="url">The URL of the web page to screenshoot.</param>
+        /// <param name="filePath">The image file to save to.</param>
+        /// <param name="width">The device width of the browser</param>
+        /// <returns>The full file path of the saved image</returns>
         public string TakeScreenshot(string url, string filePath, int? width = null)
         {
             var outputDir = Path.GetDirectoryName(filePath);
@@ -61,7 +108,11 @@ namespace Webshot
             _driver.Navigate().GoToUrl(url);
 
             ResizeWindow();
-            HighlightBrokenLinks();
+            HighlightBrokenLinks(url);
+
+            int screenshotDelay = 1000;
+            Thread.Sleep(screenshotDelay);
+
             var screenshot = _driver.GetScreenshot();
             screenshot.SaveAsFile(filePath, _imageFormat);
             ClearResize();
@@ -134,34 +185,37 @@ namespace Webshot
                 _driver.ExecuteChromeCommand("Emulation.clearDeviceMetricsOverride", new Dictionary<string, Object>());
             }
 
-            void HighlightBrokenLinks()
+            void HighlightBrokenLinks(string rawCallingUri)
             {
-                if (_options?.BrokenLinksToHighlight?.Any() != true)
+                var standardizedUri = new Uri(rawCallingUri);
+                standardizedUri = standardizedUri.TryStandardize();
+
+                if (_brokenLinks?.Any() != true)
                 {
                     return;
                 }
 
-                var selectors = _options.BrokenLinksToHighlight.Select(l => $"a[href='{l}']");
+                var selectors =
+                    _brokenLinks
+                        .SelectMany(l => l.Value.Sources)
+                        .Where(x => standardizedUri.Equals(x.CallingPage))
+                        .Select(x => $@"a[href='{x.Href}']");
+
                 var combinedSelector = string.Join(",", selectors);
 
                 var styles = $@"
-                    {combinedSelector}::after {{
-                        content: 'BROKEN LINK';
-                        background-color: red;
-                        color: white;
-                        font-weight: bold;
-                        padding: 3px;
+                    {combinedSelector} {{
+                        border: 3px dashed red;
                     }}";
 
-                var script = $@"document.write('<style type=""text/css"">{styles}</style>');";
+                var script = $@"
+var style = document.createElement('style');
+style.type = 'text/css';
+style.innerHTML = `{styles}`;
+document.getElementsByTagName('head')[0].appendChild(style);";
+
                 _driver.ExecuteScript(script);
             }
         }
-    }
-
-    public class ScreenshotterOptions
-    {
-        public IEnumerable<string> BrokenLinksToHighlight { get; set; } =
-            Enumerable.Empty<string>();
     }
 }
