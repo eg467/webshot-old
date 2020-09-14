@@ -1,10 +1,14 @@
-﻿using OpenQA.Selenium;
+﻿using Newtonsoft.Json;
+using OpenQA.Selenium;
 using OpenQA.Selenium.Chrome;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace Webshot
 {
@@ -27,9 +31,10 @@ namespace Webshot
             IEnumerable<BrokenLink> brokenLinks,
             ProjectCredentials projectCredentials)
         {
-            _options = options;
+            _options = options ?? new ScreenshotOptions();
+            brokenLinks = brokenLinks ?? Enumerable.Empty<BrokenLink>();
             _brokenLinks = brokenLinks.ToDictionary(x => x.Target, x => x);
-            _projectCredentials = projectCredentials;
+            _projectCredentials = projectCredentials ?? new ProjectCredentials();
             _driver = CreateDriver();
         }
 
@@ -37,6 +42,14 @@ namespace Webshot
             new ScreenshotOptions(),
             new List<BrokenLink>(),
             new ProjectCredentials())
+        {
+        }
+
+        public Screenshotter(Project project)
+            : this(
+                project.Options?.ScreenshotOptions,
+                project.CrawledPages?.BrokenLinks,
+                project.Options?.Credentials)
         {
         }
 
@@ -94,28 +107,56 @@ namespace Webshot
         /// <param name="filePath">The image file to save to.</param>
         /// <param name="width">The device width of the browser</param>
         /// <returns>The full file path of the saved image</returns>
-        public string TakeScreenshot(string url, string filePath, int? width = null)
+        public NavigationTiming TakeScreenshot(string url, string filePath, int? width = null)
         {
             var outputDir = Path.GetDirectoryName(filePath);
             Directory.CreateDirectory(outputDir);
             _driver.Navigate().GoToUrl(url);
 
             ResizeWindow();
-            HighlightBrokenLinks(url);
+            if (_options.HighlightBrokenLinks)
+            {
+                HighlightBrokenLinks(url);
+            }
+
+            var requestStats = GetRequestStats();
 
             int screenshotDelay = 1000;
             Thread.Sleep(screenshotDelay);
 
             var screenshot = _driver.GetScreenshot();
-
-            var dir = Path.GetDirectoryName(filePath);
-            Directory.CreateDirectory(dir);
-
             screenshot.SaveAsFile(filePath, _imageFormat);
             ClearResize();
-            return filePath;
+            return requestStats;
 
             // LOCAL FUNCTIONS
+
+            NavigationTiming GetRequestStats()
+            {
+                //JSON.stringify([...window.performance.getEntriesByType("navigation"),{ }][0])
+                try
+                {
+                    var stats = (string)_driver.ExecuteScript(
+                        @"return (window && window.performance && JSON.stringify([...window.performance.getEntriesByType('navigation'),{ }][0])) || '{}'");
+
+                    string ConvertToInt(Match m)
+                    {
+                        var origValue = m.Value;
+                        if (!double.TryParse(origValue, out var dblVal)) return origValue;
+                        var intValue = (int)Math.Round(dblVal);
+                        return intValue.ToString();
+                    }
+
+                    stats = Regex.Replace(stats, @"\d+\.\d+", ConvertToInt);
+
+                    return JsonConvert.DeserializeObject<NavigationTiming>((string)stats);
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine("Error parsing request timings: " + ex.Message);
+                    return new NavigationTiming();
+                }
+            }
 
             /// <summary>
             /// Repeatedly resize the window to account for lazily loaded elements.
@@ -125,7 +166,7 @@ namespace Webshot
             {
                 // Adapted from https://stackoverflow.com/a/56535317
                 int numTries = 0;
-                const int maxTries = 5;
+                const int maxTries = 8;
                 int prevHeight;
                 int calculatedHeight = -1;
                 string autoWidthCommand =
@@ -142,7 +183,7 @@ namespace Webshot
                     calculatedHeight = CalculateDocHeight();
 
                     // TODO: Set device-specific user agents.
-                    Dictionary<string, Object> metrics = new Dictionary<string, Object>
+                    Dictionary<string, object> metrics = new Dictionary<string, object>
                     {
                         ["width"] = _driver.ExecuteScript(calculatedWidth),
                         ["height"] = calculatedHeight,
@@ -179,7 +220,7 @@ namespace Webshot
 
             void ClearResize()
             {
-                _driver.ExecuteChromeCommand("Emulation.clearDeviceMetricsOverride", new Dictionary<string, Object>());
+                _driver.ExecuteChromeCommand("Emulation.clearDeviceMetricsOverride", new Dictionary<string, object>());
             }
 
             void HighlightBrokenLinks(string rawCallingUri)
@@ -187,10 +228,7 @@ namespace Webshot
                 var standardizedUri = new Uri(rawCallingUri);
                 standardizedUri = standardizedUri.TryStandardize();
 
-                if (_brokenLinks?.Any() != true)
-                {
-                    return;
-                }
+                if (_brokenLinks?.Any() != true) return;
 
                 var selectors =
                     _brokenLinks
@@ -212,6 +250,120 @@ style.innerHTML = `{styles}`;
 document.getElementsByTagName('head')[0].appendChild(style);";
 
                 _driver.ExecuteScript(script);
+            }
+        }
+    }
+
+    public sealed class DeviceScreenshotter
+    {
+        private readonly Project _project;
+        private ScreenshotOptions Options => _project.Options.ScreenshotOptions;
+        private FileProjectStore Store => (FileProjectStore)_project.Store;
+
+        private List<Uri> PageUris => _project.Input.SelectedUris;
+
+        private readonly string _screenshotDir;
+
+        private readonly DateTime _creationTimestamp = DateTime.Now;
+
+        public DeviceScreenshotter(Project project)
+        {
+            if (project is null)
+            {
+                throw new ArgumentNullException(nameof(project));
+            }
+            _project = project;
+            _screenshotDir = GetImageDir();
+        }
+
+        public async Task TakeScreenshotsAsync(CancellationToken? token = null, IProgress<TaskProgress> progress = null)
+        {
+            CreateEmptyDir();
+
+            var results = new ScreenshotResults(_creationTimestamp);
+
+            using (var ss = new Screenshotter(_project))
+            {
+                int i = 0;
+                foreach (var uri in PageUris)
+                {
+                    if (token?.IsCancellationRequested == true)
+                    {
+                        throw new OperationCanceledException("The screenshotting task was canceled.");
+                    }
+
+                    var currentProgress = new TaskProgress(++i, PageUris.Count, uri.AbsoluteUri);
+                    progress?.Report(currentProgress);
+                    var result = new DeviceScreenshots(uri);
+                    await ScreenshotPageAsAllDevices(ss, uri, result);
+                    results.Screenshots.Add(result);
+                }
+            }
+
+            string sessionLabel = Path.GetFileName(_screenshotDir);
+            Store.SaveScreenshotManifest(sessionLabel, results);
+            var completedProgress = new TaskProgress(PageUris.Count, PageUris.Count, "Completed");
+            progress?.Report(completedProgress);
+        }
+
+        private async Task ScreenshotPageAsAllDevices(
+               Screenshotter ss,
+               Uri url,
+               DeviceScreenshots result)
+        {
+            var sizes = Options.DeviceOptions
+                .Where(x => x.Value.Enabled && x.Value.DisplayWidthInPixels > 0)
+                .Select(x =>
+                    new KeyValuePair<Device, int>(
+                        x.Key,
+                        x.Value.DisplayWidthInPixels));
+
+            foreach (var size in sizes)
+            {
+                await ScreenshotPageAsDeviceAsync(ss, url, result, size);
+            }
+        }
+
+        private void CreateEmptyDir()
+        {
+            // Delete existing files
+            // TODO: Prompt first?
+            if (Directory.Exists(_screenshotDir))
+            {
+                Directory.Delete(_screenshotDir, true);
+            }
+            Directory.CreateDirectory(_screenshotDir);
+        }
+
+        // Returns <relative, absolute> directory paths
+        private string GetImageDir() =>
+            Options.StoreInTimestampedDir == true
+                ? Utils.CreateTimestampDirectory(Store.ScreenshotDir, _creationTimestamp)
+                : Path.Combine(Store.ScreenshotDir, "default");
+
+        private async Task ScreenshotPageAsDeviceAsync(
+                Screenshotter ss,
+                Uri url,
+                DeviceScreenshots result,
+                KeyValuePair<Device, int> size)
+        {
+            var device = size.Key;
+            var width = size.Value;
+            var baseName = Utils.SanitizeFilename(url.ToString());
+            var filename = $"{baseName}.{device}{Screenshotter.ImageExtension}";
+            var imgPath = Path.Combine(_screenshotDir, filename);
+
+            NavigationTiming TakeScreenshot() =>
+                ss.TakeScreenshot(url.ToString(), imgPath, width);
+
+            try
+            {
+                result.RequestStats = await Task.Run(TakeScreenshot);
+                result.Paths.Add(device, filename);
+            }
+            catch (Exception ex)
+            {
+                result.Error += ex.Message + Environment.NewLine;
             }
         }
     }

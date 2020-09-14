@@ -82,12 +82,12 @@ namespace Webshot
                     throw new OperationCanceledException();
                 }
 
-                progress?.Report(new TaskProgress
-                {
-                    CurrentItem = unvisited.Standardized.ToString(),
-                    Count = _linkTracker.Count(),
-                    CurrentIndex = _linkTracker.Count(u => u.Status != VisitationStatus.Unvisited)
-                });
+                var currentProgress = new TaskProgress(
+                    _linkTracker.Count(u => u.Status != VisitationStatus.Unvisited),
+                    _linkTracker.Count(),
+                    unvisited.Standardized.ToString());
+
+                progress?.Report(currentProgress);
 
                 await Visit(unvisited);
             }
@@ -256,6 +256,13 @@ namespace Webshot
         public int CurrentIndex { get; set; }
         public int Count { get; set; }
         public string CurrentItem { get; set; }
+
+        public TaskProgress(int currentIndex, int count, string currentItem)
+        {
+            this.CurrentIndex = currentIndex;
+            this.Count = count;
+            this.CurrentItem = currentItem;
+        }
     }
 
     public class Link

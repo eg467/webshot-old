@@ -32,7 +32,7 @@ namespace Webshot
                     }
 
                     var store = new FileProjectStore(value);
-                    Project = store.ProjectExists ? store.Load() : store.Create();
+                    Project = store.ProjectExists ? store.Load() : store.CreateProject();
                 }
                 catch (Exception ex)
                 {
@@ -55,7 +55,7 @@ namespace Webshot
                 _debouncedProject.Project = value;
                 if (ProjectStore?.ProjectExists == false)
                 {
-                    _debouncedProject.Save(true);
+                    _debouncedProject.SaveNow();
                 }
                 Utils.ChangeSettings(s => s.OutputDir = ProjectStore.ProjectDir);
                 RefreshProjectUi();
@@ -72,6 +72,7 @@ namespace Webshot
         public Form1 Form => _formCreator.Form;
 
         private CancellationTokenSource _cancellationTokenSource;
+        private bool IsBusy => !(CancellationTokenSource is null);
 
         private CancellationTokenSource CancellationTokenSource
         {
@@ -100,8 +101,6 @@ namespace Webshot
             Form.DisableUi = false;
         }
 
-        private bool TaskInProgress => Form.DisableUi;
-
         public Form1Controller(string projectDir = null)
         {
             _progress = new Progress<TaskProgress>(p =>
@@ -116,13 +115,25 @@ namespace Webshot
         private void ModifyProject(Action<Project> fn, bool saveImmediately = true)
         {
             fn(Project);
-            _debouncedProject.Save(saveImmediately);
+            DebouncedSave(saveImmediately);
         }
 
         private async Task ModifyProjectAsync(Func<Project, Task> fn, bool saveImmediately = true)
         {
             await fn(Project);
-            _debouncedProject.Save(saveImmediately);
+            DebouncedSave(saveImmediately);
+        }
+
+        private void DebouncedSave(bool saveImmediately)
+        {
+            if (saveImmediately)
+            {
+                _debouncedProject.SaveNow();
+            }
+            else
+            {
+                _debouncedProject.Save();
+            }
         }
 
         /// <summary>
@@ -203,122 +214,10 @@ namespace Webshot
             {
                 var stopwatch = Stopwatch.StartNew();
                 ModifyProject(p => p.Input.SelectedUris = Form.SelectedUris.ToList());
-
-                var ssOptions = Options.ScreenshotOptions;
-                var createdAt = DateTime.Now;
-                (string relImgDir, string absImgDir) = GetImageDir();
-                CreateImageDir(absImgDir);
-                var results = new ScreenshotResults
-                {
-                    Timestamp = createdAt,
-                };
-
-                using (var ss = new Screenshotter(
-                        ssOptions,
-                        Project.CrawledPages?.BrokenLinks,
-                        Options.Credentials))
-                {
-                    int i = 0;
-                    var count = Project.Input.SelectedUris.Count();
-                    foreach (var uri in Project.Input.SelectedUris)
-                    {
-                        if (token.IsCancellationRequested)
-                        {
-                            MessageBox.Show("The screenshotting task was canceled.");
-                            return;
-                        }
-
-                        _progress.Report(new TaskProgress
-                        {
-                            Count = count,
-                            CurrentIndex = ++i,
-                            CurrentItem = uri.AbsoluteUri
-                        });
-                        var result = new DeviceScreenshots(uri);
-                        await ScreenshotPageAsAllDevices(ss, uri, result);
-                        results.Screenshots.Add(result);
-                    }
-                }
-
-                ProjectStore.SaveScreenshotManifest(Path.GetFileName(relImgDir), results);
-
+                var ss = new DeviceScreenshotter(Project);
+                await ss.TakeScreenshotsAsync(token, _progress);
                 stopwatch.Stop();
                 Debug.WriteLine($"Screenshots taken in {stopwatch.Elapsed.TotalSeconds} s");
-
-                // LOCAL FUNCTIONS
-
-                // Returns <relative, absolute> directory paths
-                (string, string) GetImageDir()
-                {
-                    var basePath = Path.Combine(
-                        ProjectStore.ProjectDir,
-                        FileProjectStore.ScreenshotDir);
-
-                    string absPath = ssOptions.StoreInTimestampedDir
-                        ? Utils.CreateTimestampDirectory(basePath, createdAt)
-                        : Path.Combine(basePath, "default");
-
-                    string relPath = absPath.Replace(ProjectStore.ProjectDir, "");
-
-                    return (relPath, absPath);
-                }
-
-                void CreateImageDir(string dir)
-                {
-                    if (Directory.Exists(dir))
-                    {
-                        var numExistingFiles = Directory.GetFiles(dir).Count();
-                        if (!Form.ConfirmOverwriteImages(numExistingFiles))
-                        {
-                            return;
-                        }
-                        Directory.Delete(dir, true);
-                    }
-                    Directory.CreateDirectory(dir);
-                }
-
-                async Task ScreenshotPageAsAllDevices(
-                    Screenshotter ss,
-                    Uri url,
-                    DeviceScreenshots result)
-                {
-                    var sizes = Options.ScreenshotOptions.DeviceOptions
-                        .Where(x => x.Value.Enabled && x.Value.DisplayWidthInPixels > 0)
-                        .Select(x =>
-                            new KeyValuePair<Device, int>(
-                                x.Key,
-                                x.Value.DisplayWidthInPixels));
-
-                    foreach (var size in sizes)
-                    {
-                        await ScreenshotPageAsDeviceAsync(ss, url, result, size);
-                    }
-                }
-
-                async Task ScreenshotPageAsDeviceAsync(
-                    Screenshotter ss,
-                    Uri url,
-                    DeviceScreenshots result,
-                    KeyValuePair<Device, int> size)
-                {
-                    var device = size.Key;
-                    var width = size.Value;
-                    var baseName = Utils.SanitizeFilename(url.ToString());
-                    var filename = $"{baseName}.{device}{Screenshotter.ImageExtension}";
-                    var relPath = Path.Combine(relImgDir, filename);
-                    var absPath = Path.Combine(absImgDir, filename);
-
-                    try
-                    {
-                        await Task.Run(
-                            () => ss.TakeScreenshot(url.ToString(), absPath, width));
-                        result.Paths.Add(device, relPath);
-                    }
-                    catch (Exception ex)
-                    {
-                        result.Error += ex.Message + Environment.NewLine;
-                    }
-                }
             });
         }
 
@@ -329,6 +228,11 @@ namespace Webshot
                 ?? Form?.ChooseProjectFolder();
         }
 
+        /// <summary>
+        /// Try to save the project to one of the following, in order:
+        /// The store's location, a user-selected directory, a temporary directory.
+        /// </summary>
+        /// <param name="path"></param>
         private void SaveProject(string path = null)
         {
             ProjectStore.ProjectDir = path

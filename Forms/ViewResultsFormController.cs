@@ -73,7 +73,7 @@ namespace Webshot
         {
             Form.DisplayedImage =
                 Form.SelectedImage != null
-                ? Project.Store.GetImage(Form.SelectedImage)
+                ? Project.Store.GetImage(Form.SelectedSession, Form.SelectedImage)
                 : null;
         }
 

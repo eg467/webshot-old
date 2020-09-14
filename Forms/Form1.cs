@@ -258,14 +258,6 @@ namespace Webshot
             OnCancelTask();
         }
 
-        public bool ConfirmOverwriteImages(int existingImages) =>
-            DialogResult.Yes == MessageBox.Show(
-                this,
-                $@"This directory already contains {existingImages} files.
-                Press 'Yes' if you want to delete and replace them.",
-                "Overwrite Existing Images?",
-                MessageBoxButtons.YesNo);
-
         private void BtnSaveProject_Click(object sender, EventArgs e)
         {
             OnSaveProject();

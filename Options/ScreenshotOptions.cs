@@ -10,6 +10,8 @@ namespace Webshot
         /// </summary>
         public bool StoreInTimestampedDir { get; set; } = false;
 
+        public bool HighlightBrokenLinks { get; set; } = false;
+
         public Dictionary<Device, DeviceScreenshotOptions> DeviceOptions { get; set; } =
       new Dictionary<Device, DeviceScreenshotOptions>
       {

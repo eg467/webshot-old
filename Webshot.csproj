@@ -61,6 +61,7 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="CancellableTask.cs" />
     <Compile Include="ChromeAuthExtension.cs" />
     <Compile Include="Controls\ViewResultsControl.cs">
       <SubType>UserControl</SubType>
@@ -76,7 +77,9 @@
     </Compile>
     <Compile Include="Forms\OptionsFormController.cs" />
     <Compile Include="Options\AuthenticationOptions.cs" />
+    <Compile Include="Options\SchedulerOptions.cs" />
     <Compile Include="ProjectInput.cs" />
+    <Compile Include="ScreenshotScheduler.cs" />
     <Compile Include="Store\CompositeFileStore.cs" />
     <Compile Include="Options\DeviceScreenshotOptions.cs" />
     <Compile Include="Store\FileProjectStore.cs" />

@@ -11,8 +11,8 @@ namespace Webshot
     public class FileProjectStore : IProjectStore
     {
         public const string ProjectFilename = "webshots.wsproj";
-        public const string ScreenshotDir = "Screenshots";
         public const string ScreenshotManifestFilename = "screenshots.manifest";
+        public string ScreenshotDir => Path.Combine(ProjectDir, "Screenshots");
 
         private FileStore<Project> _filestore;
 
@@ -66,7 +66,7 @@ namespace Webshot
             return path;
         }
 
-        public Project Create()
+        public Project CreateProject()
         {
             var project = new Project(this);
             project.Save();
@@ -101,19 +101,17 @@ namespace Webshot
         public static bool DirectoryContainsProject(string directory) =>
             directory != null && File.Exists(Path.Combine(directory, ProjectFilename));
 
-        public Image GetImage(ScreenshotFile file)
+        public Image GetImage(string sessionId, ScreenshotFile file)
         {
-            var relPath = file.Result.Paths[file.Device].Trim('\\');
-            var path = Path.Combine(ProjectDir, relPath);
+            var filename = file.Result.Paths[file.Device];
+            var path = Path.Combine(ScreenshotDir, sessionId, filename);
             return Image.FromFile(path);
         }
 
         public void SaveScreenshotManifest(string label, ScreenshotResults results)
         {
-            var screenshotDir = Path.Combine(
-                ProjectDir,
-                ScreenshotDir,
-                Utils.SanitizeFilename(label));
+            string sanitizedLabel = Utils.SanitizeFilename(label);
+            var screenshotDir = Path.Combine(this.ScreenshotDir, sanitizedLabel);
 
             Directory.CreateDirectory(screenshotDir);
 
@@ -123,27 +121,38 @@ namespace Webshot
             store.Save(results);
         }
 
+        private string GetManifestPath(string dir) =>
+            Path.Combine(dir, ScreenshotManifestFilename);
+
+        private ScreenshotResults SessionResults(string sessionDir)
+        {
+            string path = GetManifestPath(sessionDir);
+            if (!File.Exists(path)) return null;
+            return LoadManifest(path);
+        }
+
+        public ScreenshotResults GetScreenshot(string sessionId)
+        {
+            string path = Path.Combine(ScreenshotDir, sessionId);
+            return SessionResults(path);
+        }
+
+        private ScreenshotResults LoadManifest(string path)
+        {
+            var store = new FileStore<ScreenshotResults>(path);
+            return store.Load();
+        }
+
         public Dictionary<string, ScreenshotResults> GetScreenshots()
         {
-            var screenshotPath = Path.Combine(ProjectDir, ScreenshotDir);
-
-            string GetManifestPath(string dir) =>
-                Path.Combine(dir, ScreenshotManifestFilename);
-
-            string GetDirectoryName(string manifestPath) =>
+            string GetSessionId(string manifestPath) =>
                 Path.GetFileName(Path.GetDirectoryName(manifestPath));
 
-            ScreenshotResults ReadManifest(string path)
-            {
-                var store = new FileStore<ScreenshotResults>(path);
-                return store.Load();
-            }
-
             // Each subdirectory under the output directory represents a session of screenshots.
-            return Directory.GetDirectories(screenshotPath)
+            return Directory.GetDirectories(ScreenshotDir)
                 .Select(GetManifestPath)
                 .Where(File.Exists)
-                .ToDictionary(GetDirectoryName, ReadManifest);
+                .ToDictionary(GetSessionId, LoadManifest);
         }
     }
 }

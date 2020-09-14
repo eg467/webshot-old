@@ -45,18 +45,20 @@ namespace Webshot
         }
 
         /// <summary>
-        /// Persists the project.
+        /// Persists the project using the debouncer.
         /// </summary>
-        /// <param name="immediate">True to save regardless of the delay status.</param>
-        public void Save(bool immediate = false)
+        public void Save()
         {
-            if (immediate)
-            {
-                _saveDebouncer.Cancel();
-                PerformSave();
-                return;
-            }
             _saveDebouncer.Call();
+        }
+
+        /// <summary>
+        /// Persist the project immediately.
+        /// </summary>
+        public void SaveNow()
+        {
+            _saveDebouncer.Cancel();
+            PerformSave();
         }
 
         /// <summary>
@@ -88,7 +90,7 @@ namespace Webshot
 
     public interface IProjectStore : IObjectStore<Project>
     {
-        Image GetImage(ScreenshotFile file);
+        Image GetImage(string sessionId, ScreenshotFile file);
 
         Dictionary<string, ScreenshotResults> GetScreenshots();
     }
