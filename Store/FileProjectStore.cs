@@ -74,17 +74,26 @@ namespace Webshot
             return project;
         }
 
-        public Project Load()
+        /// <summary>
+        /// Loads a project or creates a new one if it doesn't exist.
+        /// </summary>
+        /// <returns></returns>
+        public Project LoadProject()
         {
-            var project = _filestore.Load();
+            if (!ProjectExists)
+            {
+                return CreateProject();
+            }
+
+            var project = _filestore.LoadProject();
             project.Store = this;
             SaveToRecentProjectsList();
             return project;
         }
 
-        public void Save(Project project)
+        public void SaveProject(Project project)
         {
-            _filestore.Save(project);
+            _filestore.SaveProject(project);
         }
 
         private void SaveToRecentProjectsList()
@@ -118,7 +127,7 @@ namespace Webshot
             var manifestPath = Path.Combine(screenshotDir, ScreenshotManifestFilename);
 
             var store = new FileStore<ScreenshotResults>(manifestPath);
-            store.Save(results);
+            store.SaveProject(results);
         }
 
         private string GetManifestPath(string dir) =>
@@ -140,7 +149,7 @@ namespace Webshot
         private ScreenshotResults LoadManifest(string path)
         {
             var store = new FileStore<ScreenshotResults>(path);
-            return store.Load();
+            return store.LoadProject();
         }
 
         public Dictionary<string, ScreenshotResults> GetScreenshots()

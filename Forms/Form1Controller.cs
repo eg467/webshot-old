@@ -12,35 +12,9 @@ namespace Webshot
 {
     public class Form1Controller : IFormController<Form1>
     {
-        private FileProjectStore ProjectStore
-        {
-            get => Project?.Store as FileProjectStore;
-            set { Project = value != null ? new Project(value) : null; }
-        }
-
-        private string ProjectDirectory
-        {
-            get => ProjectStore?.ProjectDir;
-            set
-            {
-                try
-                {
-                    if (string.IsNullOrEmpty(value))
-                    {
-                        Project = null;
-                        return;
-                    }
-
-                    var store = new FileProjectStore(value);
-                    Project = store.ProjectExists ? store.Load() : store.CreateProject();
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show("There was an error loading your project: " + ex.Message);
-                    throw;
-                }
-            }
-        }
+        // Directory
+        // Store
+        // Project
 
         private readonly DebouncedProject _debouncedProject = new DebouncedProject();
 
@@ -53,15 +27,13 @@ namespace Webshot
             private set
             {
                 _debouncedProject.Project = value;
-                if (ProjectStore?.ProjectExists == false)
-                {
-                    _debouncedProject.SaveNow();
-                }
                 Utils.ChangeSettings(s => s.OutputDir = ProjectStore.ProjectDir);
                 RefreshProjectUi();
             }
         }
 
+        private FileProjectStore ProjectStore => Project?.Store as FileProjectStore;
+        public string ProjectDirectory => ProjectStore.ProjectDir;
         private Options Options => Project?.Options;
 
         private readonly FormCreator<
@@ -72,7 +44,6 @@ namespace Webshot
         public Form1 Form => _formCreator.Form;
 
         private CancellationTokenSource _cancellationTokenSource;
-        private bool IsBusy => !(CancellationTokenSource is null);
 
         private CancellationTokenSource CancellationTokenSource
         {
@@ -109,7 +80,10 @@ namespace Webshot
             });
             _formCreator = new FormCreator<Form1, Form1Controller>(this);
             _debouncedProject.Saved += (s, e) => Form.FlashProjectSaved();
-            ProjectDirectory = projectDir;
+            if (!string.IsNullOrEmpty(projectDir))
+            {
+                LoadOrCreateProject(projectDir);
+            }
         }
 
         private void ModifyProject(Action<Project> fn, bool saveImmediately = true)
@@ -118,7 +92,9 @@ namespace Webshot
             DebouncedSave(saveImmediately);
         }
 
-        private async Task ModifyProjectAsync(Func<Project, Task> fn, bool saveImmediately = true)
+        private async Task ModifyProjectAsync(
+            Func<Project, Task> fn,
+            bool saveImmediately = true)
         {
             await fn(Project);
             DebouncedSave(saveImmediately);
@@ -136,33 +112,7 @@ namespace Webshot
             }
         }
 
-        /// <summary>
-        /// Performs an action that can be cancelled.
-        /// </summary>
-        /// <remarks>Not thread safe.</remarks>
-        /// <param name="fn"></param>
-        private void CancellableAction(Action<CancellationToken> fn)
-        {
-            using (CancellationTokenSource = new CancellationTokenSource())
-            {
-                fn(CancellationTokenSource.Token);
-            }
-            CancellationTokenSource = null;
-        }
-
-        /// <summary>
-        /// Performs an action that can be cancelled.
-        /// </summary>
-        /// <remarks>Not thread safe.</remarks>
-        /// <param name="fn"></param>
-        private async Task CancellableActionAsync(Func<CancellationToken, Task> fn)
-        {
-            using (CancellationTokenSource = new CancellationTokenSource())
-            {
-                await fn(CancellationTokenSource.Token);
-            }
-            CancellationTokenSource = null;
-        }
+        private readonly CancellableTask _cancellableTask = new CancellableTask();
 
         public IProgress<TaskProgress> _progress;
 
@@ -184,7 +134,7 @@ namespace Webshot
             }
 
             await TemporarilyDisableUiAsync(async () =>
-                await CancellableActionAsync(async token =>
+                await _cancellableTask.PerformAsync(async token =>
                  {
                      var spider = new Spider(initialUris, spiderOptions, creds);
 
@@ -210,7 +160,7 @@ namespace Webshot
 
         private async Task TakeScreenshots()
         {
-            await CancellableActionAsync(async token =>
+            await _cancellableTask.PerformAsync(async token =>
             {
                 var stopwatch = Stopwatch.StartNew();
                 ModifyProject(p => p.Input.SelectedUris = Form.SelectedUris.ToList());
@@ -221,60 +171,32 @@ namespace Webshot
             });
         }
 
-        private void LoadProject(string path = null)
+        private void LoadOrCreateProject(string projectDirectory)
         {
-            ProjectDirectory = path
-                ?? ProjectStore?.ProjectDir
-                ?? Form?.ChooseProjectFolder();
+            var store = new FileProjectStore(projectDirectory);
+            Project = store.LoadProject();
         }
 
-        /// <summary>
-        /// Try to save the project to one of the following, in order:
-        /// The store's location, a user-selected directory, a temporary directory.
-        /// </summary>
-        /// <param name="path"></param>
-        private void SaveProject(string path = null)
+        private void SaveProject()
         {
-            ProjectStore.ProjectDir = path
-                ?? ProjectStore.ProjectDir
-                ?? Form.ChooseSaveFileDialog()
-                ?? FileProjectStore.CreateTempProjectDirectory(temporaryDir: true);
-
-            ProjectStore.Save(Project);
+            _debouncedProject.Save();
         }
 
         private void RefreshProjectUi()
         {
-            if (Form == null)
-            {
-                // Wait for the Form Load event to refresh UI
-                return;
-            }
+            // Wait for the Form Load event to refresh UI
+            if (Form == null) return;
+
+            _debouncedProject.Flush();
+            Form.IsProjectLoaded = Project is object;
             Form.ProjectPath = ProjectDirectory;
             Form.ProjectName = Project.Name;
             Form.SpiderSeedUris = Project.Input.SpiderSeedUris;
+            var selectedPages = Project.Input.SelectedUris;
             Form.ScreenshotUris = Project.CrawledPages.SitePages
-                .Select(u => new Tuple<Uri, bool>(
-                    u,
-                    Project.Input.SelectedUris.Contains(u)));
+                .Select(u => (u, selectedPages.Contains(u)));
 
             Form.BrokenLinks = Project.CrawledPages.BrokenLinks;
-        }
-
-        private void ViewScreenshots()
-        {
-            Dictionary<string, ScreenshotResults> screenshots = ProjectStore.GetScreenshots();
-            var controller = new ViewResultsFormController(_debouncedProject, screenshots);
-            var form = controller.CreateForm();
-
-            form.ShowDialog(this.Form);
-        }
-
-        private void ViewOptions()
-        {
-            var controller = new OptionsFormController(Project);
-            var form = controller.CreateForm();
-            form.ShowDialog(Form);
         }
 
         public Form1 CreateForm()
@@ -293,7 +215,6 @@ namespace Webshot
             Form.CreateProject += Form_CreateProject;
             Form.LoadProject += Form_LoadProject;
             Form.SaveProject += Form_SaveProject;
-            Form.CreateProject += Form_CreateProject;
             Form.SiteCrawlRequest += Form_SiteCrawlRequest;
             Form.ScreenshotRequest += Form_ScreenshotRequest;
             Form.SelectedUrisChanged += Form_SelectedUrisChanged;
@@ -310,7 +231,6 @@ namespace Webshot
             Form.CreateProject -= Form_CreateProject;
             Form.LoadProject -= Form_LoadProject;
             Form.SaveProject -= Form_SaveProject;
-            Form.CreateProject -= Form_CreateProject;
             Form.SiteCrawlRequest -= Form_SiteCrawlRequest;
             Form.ScreenshotRequest -= Form_ScreenshotRequest;
             Form.SelectedUrisChanged -= Form_SelectedUrisChanged;
@@ -321,7 +241,6 @@ namespace Webshot
 
         private void Form_Load(object sender, EventArgs e)
         {
-            LoadProject();
             Form.RefreshRecentProjects(GetRecentProjects());
         }
 
@@ -342,14 +261,12 @@ namespace Webshot
 
         private void Form_LoadProject(object sender, ProjectFileEventArgs e)
         {
-            LoadProject(e.Path);
+            LoadOrCreateProject(e.Path);
         }
 
         private void Form_CreateProject(object sender, ProjectFileEventArgs e)
         {
-            ProjectDirectory =
-                e.Path
-                ?? FileProjectStore.CreateTempProjectDirectory(temporaryDir: false);
+            LoadOrCreateProject(e.Path);
         }
 
         private void Form_SelectedUrisChanged(object sender, SelectedUrisChangedEventArgs e)
@@ -364,12 +281,17 @@ namespace Webshot
 
         private void Form_ShowOptions(object sender, EventArgs e)
         {
-            ViewOptions();
+            var controller = new OptionsFormController(Project);
+            var form = controller.CreateForm();
+            form.ShowDialog(Form);
         }
 
         private void Form_ShowResults(object sender, EventArgs e)
         {
-            ViewScreenshots();
+            Dictionary<string, ScreenshotResults> screenshots = ProjectStore.GetScreenshots();
+            var controller = new ViewResultsFormController(_debouncedProject, screenshots);
+            var form = controller.CreateForm();
+            form.ShowDialog(this.Form);
         }
     }
 }

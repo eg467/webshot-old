@@ -24,7 +24,7 @@ namespace Webshot
             Store = store;
         }
 
-        public void Save() => Store.Save(this);
+        public void Save() => Store.SaveProject(this);
     }
 
     /// <summary>
@@ -41,7 +41,7 @@ namespace Webshot
         public DebouncedProject(Project project = null, int delay = 2000, int maxSavesBeforeDisposal = 0)
         {
             Project = project;
-            _saveDebouncer = new Debouncer(PerformSave, delay, maxSavesBeforeDisposal);
+            _saveDebouncer = new Debouncer(SaveNow, delay, maxSavesBeforeDisposal);
         }
 
         /// <summary>
@@ -53,23 +53,18 @@ namespace Webshot
         }
 
         /// <summary>
-        /// Persist the project immediately.
+        /// Saves the project immediately.
         /// </summary>
         public void SaveNow()
         {
             _saveDebouncer.Cancel();
-            PerformSave();
-        }
-
-        /// <summary>
-        /// Saves the project immediately.
-        /// </summary>
-        private void PerformSave()
-        {
             Project?.Save();
             Saved?.Invoke(this, EventArgs.Empty);
         }
 
+        /// <summary>
+        /// Saves the project if a save is pending.
+        /// </summary>
         public void Flush()
         {
             _saveDebouncer.Flush();
@@ -83,9 +78,9 @@ namespace Webshot
 
     public interface IObjectStore<T>
     {
-        void Save(T obj);
+        void SaveProject(T obj);
 
-        T Load();
+        T LoadProject();
     }
 
     public interface IProjectStore : IObjectStore<Project>

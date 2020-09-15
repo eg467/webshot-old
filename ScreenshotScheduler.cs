@@ -89,7 +89,7 @@ namespace Webshot
             }
 
             var store = new FileProjectStore(path);
-            return store.Load();
+            return store.LoadProject();
         }
 
         public void Dispose()

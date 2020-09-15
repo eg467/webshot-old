@@ -42,7 +42,7 @@ namespace Webshot
                 this.btnCancelTask.Enabled = value;
                 this.pnlCrawl.Enabled = !value;
                 this.pnlSelectedPages.Enabled = !value;
-                this.pnlProject.Enabled = !value;
+                this.pnlProjectSelection.Enabled = !value;
 
                 if (!value)
                 {
@@ -51,6 +51,12 @@ namespace Webshot
                     this.lblStatus.Text = "";
                 }
             }
+        }
+
+        public bool IsProjectLoaded
+        {
+            get => this.pnlProjectMain.Visible;
+            set => this.pnlProjectMain.Visible = value;
         }
 
         public string ProjectName
@@ -93,11 +99,10 @@ namespace Webshot
         public IEnumerable<Uri> SelectedUris =>
             ScreenshotUris.Where(x => x.Item2).Select(x => x.Item1);
 
-        public IEnumerable<Tuple<Uri, bool>> ScreenshotUris
+        public IEnumerable<(Uri, bool)> ScreenshotUris
         {
             get => this.clbSelectedUris.Items.Cast<Uri>()
-                    .Select((x, idx) => new Tuple<Uri, bool>(
-                        x, this.clbSelectedUris.GetItemChecked(idx)));
+                    .Select((x, idx) => (x, this.clbSelectedUris.GetItemChecked(idx)));
             set
             {
                 this.clbSelectedUris.Items.Clear();
@@ -326,11 +331,9 @@ namespace Webshot
         private void BtnCreateProject_Click(object sender, EventArgs e)
         {
             string folder = ChooseProjectFolder();
-            if (folder != null)
-            {
-                var args = new ProjectFileEventArgs(folder);
-                OnCreateProject(args);
-            }
+            if (folder is null) return;
+            var args = new ProjectFileEventArgs(folder);
+            OnCreateProject(args);
         }
 
         private void btnBrokenLinks_Click(object sender, EventArgs e)

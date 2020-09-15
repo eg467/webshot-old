@@ -7,13 +7,14 @@ namespace Webshot
     public class FileStore<T> : IObjectStore<T> where T : class
     {
         public string FilePath { get; set; }
+        public bool FileExists => File.Exists(FilePath);
 
         public FileStore(string filePath)
         {
             FilePath = filePath;
         }
 
-        public T Load()
+        public T LoadProject()
         {
             return Load(typeof(T)) as T;
         }
@@ -38,7 +39,7 @@ namespace Webshot
                 JsonSettings);
         }
 
-        public void Save(T obj)
+        public void SaveProject(T obj)
         {
             var dir = Path.GetDirectoryName(FilePath);
             Directory.CreateDirectory(dir);

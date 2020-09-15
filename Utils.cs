@@ -122,7 +122,6 @@ namespace Webshot
         /// </summary>
         public void Call()
         {
-            _timer?.Stop();
             _timer?.Start();
         }
 
@@ -146,8 +145,7 @@ namespace Webshot
 
         private void CallAction()
         {
-            Debug.WriteLine("Invoking Debounced Action. " + DateTime.Now.ToLongTimeString());
-            _timer.Stop();
+            _timer?.Stop();
             _action();
             if (++_callCount == _callLimit)
             {

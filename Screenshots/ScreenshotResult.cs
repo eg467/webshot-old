@@ -33,6 +33,7 @@ namespace Webshot
         public int FetchStart { get; set; }
         public int LoadEventEnd { get; set; }
         public int LoadEventStart { get; set; }
+        public int RedirectEnd { get; set; }
         public int RedirectStart { get; set; }
         public int RequestStart { get; set; }
         public int ResponseEnd { get; set; }
@@ -49,6 +50,15 @@ namespace Webshot
         public int DomainLookupStart { get; set; }
         public int Duration { get; set; }
         public int TransferSize { get; set; }
+
+        public int Ttfb => FromStart(ResponseStart);
+
+        public int FromStart(Func<NavigationTiming, int> positionFn) => FromStart(positionFn(this));
+
+        public int FromStart(int position) => position - FetchStart;
+
+        public int Difference(Func<NavigationTiming, int> startFn, Func<NavigationTiming, int> endFn) =>
+            endFn(this) - startFn(this);
     }
 
     public class ScreenshotResults
