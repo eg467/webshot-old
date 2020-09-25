@@ -12,15 +12,18 @@ namespace Webshot
     {
         public const string ProjectFilename = "webshots.wsproj";
         public const string ScreenshotManifestFilename = "screenshots.manifest";
-        public string ScreenshotDir => Path.Combine(ProjectDir, "Screenshots");
 
         private FileStore<Project> _filestore;
 
+        public event EventHandler<ProjectSavedEventArgs> Saved;
+
         public bool ProjectExists => DirectoryContainsProject(ProjectDir);
+
+        public string ProjectPath => _filestore.FilePath;
 
         public string ProjectDir
         {
-            get => Path.GetDirectoryName(_filestore.FilePath);
+            get => Path.GetDirectoryName(ProjectPath);
             set
             {
                 var filePath = Path.Combine(value, ProjectFilename);
@@ -28,12 +31,19 @@ namespace Webshot
             }
         }
 
-        public FileProjectStore()
-        {
-        }
+        public string ScreenshotDir => Path.Combine(ProjectDir, "Screenshots");
 
-        public FileProjectStore(string projectDir) : this()
+        public FileProjectStore(string projectDir)
         {
+            if (string.IsNullOrEmpty(projectDir))
+            {
+                throw new ArgumentNullException(nameof(projectDir));
+            }
+            if (projectDir.Contains(ProjectFilename))
+            {
+                projectDir = Path.GetDirectoryName(projectDir);
+            }
+
             ProjectDir = projectDir;
             Directory.CreateDirectory(projectDir);
         }
@@ -43,6 +53,8 @@ namespace Webshot
                 Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
                 nameof(Webshot),
                 "Projects");
+
+        public bool Exists => _filestore.FileExists;
 
         /// <summary>
         ///
@@ -69,7 +81,7 @@ namespace Webshot
         public Project CreateProject()
         {
             var project = new Project(this);
-            project.Save();
+            Save(project);
             SaveToRecentProjectsList();
             return project;
         }
@@ -78,22 +90,23 @@ namespace Webshot
         /// Loads a project or creates a new one if it doesn't exist.
         /// </summary>
         /// <returns></returns>
-        public Project LoadProject()
+        public Project Load()
         {
             if (!ProjectExists)
             {
                 return CreateProject();
             }
 
-            var project = _filestore.LoadProject();
+            var project = _filestore.Load();
             project.Store = this;
             SaveToRecentProjectsList();
             return project;
         }
 
-        public void SaveProject(Project project)
+        public void Save(Project project)
         {
-            _filestore.SaveProject(project);
+            _filestore.Save(project);
+            OnSaved(project);
         }
 
         private void SaveToRecentProjectsList()
@@ -127,32 +140,32 @@ namespace Webshot
             var manifestPath = Path.Combine(screenshotDir, ScreenshotManifestFilename);
 
             var store = new FileStore<ScreenshotResults>(manifestPath);
-            store.SaveProject(results);
+            store.Save(results);
         }
 
         private string GetManifestPath(string dir) =>
             Path.Combine(dir, ScreenshotManifestFilename);
 
-        private ScreenshotResults SessionResults(string sessionDir)
+        private ScreenshotResults SessionResultsFromDir(string sessionDir)
         {
             string path = GetManifestPath(sessionDir);
             if (!File.Exists(path)) return null;
-            return LoadManifest(path);
+            return LoadResultManifest(path);
         }
 
-        public ScreenshotResults GetScreenshot(string sessionId)
-        {
-            string path = Path.Combine(ScreenshotDir, sessionId);
-            return SessionResults(path);
-        }
-
-        private ScreenshotResults LoadManifest(string path)
+        private ScreenshotResults LoadResultManifest(string path)
         {
             var store = new FileStore<ScreenshotResults>(path);
-            return store.LoadProject();
+            return store.Load();
         }
 
-        public Dictionary<string, ScreenshotResults> GetScreenshots()
+        public ScreenshotResults GetSessionResults(string sessionId)
+        {
+            string path = Path.Combine(ScreenshotDir, sessionId);
+            return SessionResultsFromDir(path);
+        }
+
+        public Dictionary<string, ScreenshotResults> GetAllResults()
         {
             string GetSessionId(string manifestPath) =>
                 Path.GetFileName(Path.GetDirectoryName(manifestPath));
@@ -161,7 +174,21 @@ namespace Webshot
             return Directory.GetDirectories(ScreenshotDir)
                 .Select(GetManifestPath)
                 .Where(File.Exists)
-                .ToDictionary(GetSessionId, LoadManifest);
+                .ToDictionary(GetSessionId, LoadResultManifest);
+        }
+
+        protected void OnSaved(Project project)
+        {
+            var args = new ProjectSavedEventArgs(project);
+            Saved?.Invoke(this, args);
+        }
+    }
+
+    internal class FileProjectStoreFactory : IProjectStoreFactory
+    {
+        public IProjectStore Create(string projectId)
+        {
+            return new FileProjectStore(projectId);
         }
     }
 }

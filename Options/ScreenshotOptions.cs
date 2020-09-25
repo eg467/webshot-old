@@ -8,7 +8,7 @@ namespace Webshot
         /// True to store each iteratation of screenshots in a new directory.
         /// False to overwrite images on each iteration of screenshots.
         /// </summary>
-        public bool StoreInTimestampedDir { get; set; } = false;
+        public bool StoreInTimestampedDir { get; set; } = true;
 
         public bool HighlightBrokenLinks { get; set; } = false;
 

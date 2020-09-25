@@ -260,7 +260,7 @@ document.getElementsByTagName('head')[0].appendChild(style);";
         private ScreenshotOptions Options => _project.Options.ScreenshotOptions;
         private FileProjectStore Store => (FileProjectStore)_project.Store;
 
-        private List<Uri> PageUris => _project.Input.SelectedUris;
+        private List<Uri> PageUris => _project.Input.SelectedPages;
 
         private readonly string _screenshotDir;
 
@@ -289,7 +289,7 @@ document.getElementsByTagName('head')[0].appendChild(style);";
                 {
                     if (token?.IsCancellationRequested == true)
                     {
-                        throw new OperationCanceledException("The screenshotting task was canceled.");
+                        throw new TaskCanceledException("The screenshotting task was canceled.");
                     }
 
                     var currentProgress = new TaskProgress(++i, PageUris.Count, uri.AbsoluteUri);

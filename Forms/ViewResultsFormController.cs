@@ -16,9 +16,9 @@ namespace Webshot
         private Project Project => _debouncedProject.Project;
         private readonly Dictionary<string, ScreenshotResults> _results;
 
-        private readonly DebouncedProject _debouncedProject;
+        private readonly DebouncedProjectSaver _debouncedProject;
 
-        public ViewResultsFormController(DebouncedProject project, Dictionary<string, ScreenshotResults> results)
+        public ViewResultsFormController(DebouncedProjectSaver project, Dictionary<string, ScreenshotResults> results)
         {
             if (project is null)
             {

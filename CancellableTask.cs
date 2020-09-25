@@ -10,7 +10,7 @@ namespace Webshot
         public bool Busy => _canceler is object;
         private readonly object _lock = new object();
 
-        private bool Cancel()
+        public bool Cancel()
         {
             lock (_lock)
             {
@@ -47,10 +47,9 @@ namespace Webshot
         {
             lock (_lock)
             {
-                UnsafeCancel();
+                UnsafeDisposeCanceler();
                 _canceler = new CancellationTokenSource(timeout);
                 _canceler.Token.Register(DisposeCanceler);
-                UnsafeDisposeCanceler();
             }
         }
 
@@ -64,6 +63,13 @@ namespace Webshot
             return result;
         }
 
+        /// <summary>
+        ///
+        /// </summary>
+        /// <param name="fn"></param>
+        /// <param name="timeout"></param>
+        /// <returns></returns>
+        /// <exception cref="TaskCanceledException"/>
         public async Task PerformAsync(Func<CancellationToken, Task> fn, int timeout = -1)
         {
             CreateCanceler(timeout);

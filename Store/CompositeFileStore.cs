@@ -14,9 +14,14 @@ namespace Webshot
             FilePath = filePath;
         }
 
-        public T LoadProject()
+        public T Load()
         {
-            return Load(typeof(T)) as T;
+            if (!File.Exists(FilePath))
+            {
+                throw new FileNotFoundException("File not found.", FilePath);
+            }
+            var serializedContents = File.ReadAllText(FilePath);
+            return JsonConvert.DeserializeObject<T>(serializedContents, JsonSettings);
         }
 
         private static JsonSerializerSettings JsonSettings =>
@@ -25,24 +30,14 @@ namespace Webshot
                     Formatting = Formatting.Indented,
                 };
 
-        public object Load(Type t)
-        {
-            if (!File.Exists(FilePath))
-            {
-                throw new FileNotFoundException("File not found.", FilePath);
-            }
-            var serializedContents = File.ReadAllText(FilePath);
-
-            return JsonConvert.DeserializeObject(
-                serializedContents,
-                t,
-                JsonSettings);
-        }
-
-        public void SaveProject(T obj)
+        public void Save(T obj)
         {
             var dir = Path.GetDirectoryName(FilePath);
-            Directory.CreateDirectory(dir);
+
+            if (!string.IsNullOrEmpty(dir))
+            {
+                Directory.CreateDirectory(dir);
+            }
 
             var serializedContents = JsonConvert.SerializeObject(obj, JsonSettings);
             File.WriteAllText(FilePath, serializedContents);

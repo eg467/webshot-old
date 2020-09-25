@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Data;
 using System.Linq;
 using System.Windows.Forms;
+using Webshot.Store;
 
 namespace Webshot.Forms
 {
@@ -15,7 +16,28 @@ namespace Webshot.Forms
             Save?.Invoke(this, EventArgs.Empty);
         }
 
-        public string ProjectName
+        private string _projectPath;
+        private Project _project;
+        private IProjectStoreFactory _projectStoreFactory = new FileProjectStoreFactory();
+
+        public void SetProject(string projectPath)
+        {
+            _projectPath = projectPath;
+            IProjectStore store = _projectStoreFactory.Create(_projectPath);
+            _project = store.Load();
+            ProjectNameUi = _project.Name;
+            OptionsUi = _project.Options;
+            ScheduledProjectUi = ScheduledProject;
+        }
+
+        private ScheduledProject ScheduledProject =>
+            GetScheduledProject(new SchedulerStore().Load());
+
+        private ScheduledProject GetScheduledProject(SchedulerSettings settings) =>
+            settings.ScheduledProjects
+            .FirstOrDefault(p => p.ProjectId == _projectPath);
+
+        public string ProjectNameUi
         {
             get => this.txtProjectName.Text;
             set { this.txtProjectName.Text = value; }
@@ -25,30 +47,58 @@ namespace Webshot.Forms
         /// The project options with settings in this form.
         /// (Some options will be set
         /// </summary>
-        public Options Options
+        private Options OptionsUi
         {
             get => new Options
             {
-                ScreenshotOptions = ScreenshotOptions,
-                ViewerOptions = ViewerOptions,
-                SpiderOptions = SpiderOptions,
-                Credentials = Credentials,
+                ScreenshotOptions = ScreenshotOptionsUi,
+                ViewerOptions = ViewerOptionsUi,
+                SpiderOptions = SpiderOptionsUi,
+                Credentials = CredentialsUi,
             };
             set
             {
-                ScreenshotOptions = value.ScreenshotOptions;
-                ViewerOptions = value.ViewerOptions;
-                SpiderOptions = value.SpiderOptions;
-                Credentials = value.Credentials;
+                ScreenshotOptionsUi = value.ScreenshotOptions;
+                ViewerOptionsUi = value.ViewerOptions;
+                SpiderOptionsUi = value.SpiderOptions;
+                CredentialsUi = value.Credentials;
             }
         }
 
-        public ProjectCredentials Credentials
+        private ScheduledProject ScheduledProjectUi
+        {
+            get
+            {
+                // Pull some values from current settings
+                var originalValues = ScheduledProject;
+
+                return this.cbScheduled.Checked
+                    ? new ScheduledProject()
+                    {
+                        Enabled = this.cbScheduled.Checked,
+                        Interval = TimeSpan.FromMinutes((double)this.numScheduleInterval.Value),
+                        ProjectId = _projectPath,
+                        RunImmediately = originalValues?.RunImmediately ?? false,
+                        LastRun = originalValues?.LastRun
+                    }
+                    : null;
+            }
+            set
+            {
+                this.cbScheduled.Checked = value?.Enabled == true;
+                var defaultInterval = new ScheduledProject().Interval;
+                var interval = value?.Interval ?? defaultInterval;
+                this.numScheduleInterval.Value = (int)interval.TotalMinutes;
+            }
+        }
+
+        private ProjectCredentials CredentialsUi
         {
             get
             {
                 var projectCreds = new ProjectCredentials();
 
+                // Parsed in form 'domain:user:password'
                 this.txtCreds.Text
                     .Split(
                         new[] { Environment.NewLine },
@@ -58,7 +108,7 @@ namespace Webshot.Forms
                     {
                         if (c.Length != 3)
                         {
-                            throw new ArgumentException(nameof(Credentials));
+                            throw new ArgumentException(nameof(CredentialsUi));
                         }
                         var siteCreds = new AuthCredentials(c[1], c[2]);
                         projectCreds.CredentialsByDomain.Add(c[0], siteCreds);
@@ -76,7 +126,7 @@ namespace Webshot.Forms
             }
         }
 
-        public SpiderOptions SpiderOptions
+        private SpiderOptions SpiderOptionsUi
         {
             get => new SpiderOptions
             {
@@ -84,16 +134,16 @@ namespace Webshot.Forms
                     this.txtSpiderBlacklist.Text.Length > 0
                         ? this.txtSpiderBlacklist.Text
                         : null,
-                FollowExternalLinks = this.cbCrawlExternalLinks.Checked,
+                TrackExternalLinks = this.cbCrawlExternalLinks.Checked,
             };
             set
             {
                 this.txtSpiderBlacklist.Text = value.UriBlacklistPattern;
-                this.cbCrawlExternalLinks.Checked = value.FollowExternalLinks;
+                this.cbCrawlExternalLinks.Checked = value.TrackExternalLinks;
             }
         }
 
-        public ViewerOptions ViewerOptions
+        private ViewerOptions ViewerOptionsUi
         {
             get => new ViewerOptions
             {
@@ -115,7 +165,7 @@ namespace Webshot.Forms
             }
         }
 
-        public ScreenshotOptions ScreenshotOptions
+        private ScreenshotOptions ScreenshotOptionsUi
         {
             get => new ScreenshotOptions
             {
@@ -153,18 +203,53 @@ namespace Webshot.Forms
             InitializeComponent();
         }
 
-        private void BtnSave_Click(object sender, EventArgs e)
+        public OptionsForm(string path) : this()
         {
-            OnSave();
+            SetProject(path);
         }
 
-        private void SettingsForm_Load(object sender, EventArgs e)
+        private void SaveSettings()
         {
+            if (_project is null) return;
+            _project.Name = ProjectNameUi;
+            _project.Options = OptionsUi;
+            _project.Store.Save(_project);
+            SaveSchedulerUiToSettings();
+        }
+
+        private void BtnSave_Click(object sender, EventArgs e)
+        {
+            SaveSettings();
+            DialogResult = DialogResult.OK;
+            Close();
         }
 
         private void BtnResetOptions_Click(object sender, EventArgs e)
         {
-            Options = new Options();
+            OptionsUi = new Options();
+            this.cbScheduled.Checked = false;
+            SaveSettings();
+        }
+
+        private void SaveSchedulerUiToSettings()
+        {
+            var store = new SchedulerStore();
+            var settings = store.Load();
+            var scheduled = GetScheduledProject(settings);
+
+            if (scheduled is null)
+            {
+                scheduled = new ScheduledProject();
+                settings.ScheduledProjects.Add(scheduled);
+            }
+
+            scheduled.Enabled = this.cbScheduled.Checked;
+            scheduled.Interval = TimeSpan.FromMinutes((double)this.numScheduleInterval.Value);
+            scheduled.ProjectId = _projectPath;
+            scheduled.RunImmediately = scheduled?.RunImmediately ?? false;
+            scheduled.LastRun = scheduled?.LastRun;
+
+            store.Save(settings);
         }
     }
 }

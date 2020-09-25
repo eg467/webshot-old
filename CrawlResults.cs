@@ -8,14 +8,14 @@ namespace Webshot
     [Serializable]
     public class CrawlResults
     {
-        public Dictionary<Uri, VisitationStatus> Uris { get; set; }
-            = new Dictionary<Uri, VisitationStatus>();
+        public Dictionary<Uri, SpiderPageStatus> Uris { get; set; }
+            = new Dictionary<Uri, SpiderPageStatus>();
 
         public List<BrokenLink> BrokenLinks { get; set; } = new List<BrokenLink>();
 
         public DateTime Timestamp { get; set; } = DateTime.Now;
 
-        public CrawlResults(Dictionary<Uri, VisitationStatus> uris, List<BrokenLink> brokenLinks)
+        public CrawlResults(Dictionary<Uri, SpiderPageStatus> uris, List<BrokenLink> brokenLinks)
         {
             this.Uris = uris;
             this.BrokenLinks = brokenLinks;
@@ -26,9 +26,9 @@ namespace Webshot
         {
         }
 
-        public IEnumerable<Uri> SitePages => UrisByStatus(VisitationStatus.Visited);
+        public IEnumerable<Uri> SitePages => UrisByStatus(SpiderPageStatus.Visited);
 
-        private IEnumerable<Uri> UrisByStatus(VisitationStatus status) =>
+        private IEnumerable<Uri> UrisByStatus(SpiderPageStatus status) =>
             Uris
             .Where(x => x.Value == status)
             .Select(x => x.Key)

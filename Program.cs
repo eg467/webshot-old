@@ -32,13 +32,13 @@ namespace Webshot
 
         private static Form1 CreateForm(string projectPath)
         {
+            var frm = new Form1();
             if (File.Exists(projectPath))
             {
-                projectPath = Path.GetDirectoryName(projectPath);
+                var projectDir = Path.GetDirectoryName(projectPath);
+                frm.LoadOrCreateProject(projectPath);
             }
-
-            var frmController = new Form1Controller(projectPath);
-            return frmController.CreateForm();
+            return frm;
         }
 
         [System.Runtime.InteropServices.DllImport("user32.dll")]

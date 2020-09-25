@@ -64,6 +64,12 @@
   <ItemGroup>
     <Compile Include="CancellableTask.cs" />
     <Compile Include="ChromeAuthExtension.cs" />
+    <Compile Include="Controls\AutomatedScreenshotsControl.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Controls\AutomatedScreenshotsControl.Designer.cs">
+      <DependentUpon>AutomatedScreenshotsControl.cs</DependentUpon>
+    </Compile>
     <Compile Include="Controls\ScreenshotProjectControl.cs">
       <SubType>UserControl</SubType>
     </Compile>
@@ -82,9 +88,8 @@
     <Compile Include="Forms\BrokenLinksForm.Designer.cs">
       <DependentUpon>BrokenLinksForm.cs</DependentUpon>
     </Compile>
-    <Compile Include="Forms\OptionsFormController.cs" />
+    <Compile Include="Logger.cs" />
     <Compile Include="Options\AuthenticationOptions.cs" />
-    <Compile Include="Options\SchedulerOptions.cs" />
     <Compile Include="ProjectInput.cs" />
     <Compile Include="ScreenshotScheduler.cs" />
     <Compile Include="Store\CompositeFileStore.cs" />
@@ -124,7 +129,6 @@
     <Compile Include="Forms\Form1.Designer.cs">
       <DependentUpon>Form1.cs</DependentUpon>
     </Compile>
-    <Compile Include="Forms\Form1Controller.cs" />
     <Compile Include="Forms\FormCreator.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Project.cs" />
@@ -134,6 +138,8 @@
     <Compile Include="Screenshots\Screenshotter.cs" />
     <Compile Include="Spider.cs" />
     <Compile Include="Options\SpiderOptions.cs" />
+    <Compile Include="Store\ProjectSavedEventArgs.cs" />
+    <Compile Include="Store\SchedulerStore.cs" />
     <Compile Include="Utils.cs" />
     <Compile Include="Forms\ViewResultsForm.cs">
       <SubType>Form</SubType>
@@ -143,6 +149,9 @@
     </Compile>
     <Compile Include="Options\ViewerOptions.cs" />
     <Compile Include="Forms\ViewResultsFormController.cs" />
+    <EmbeddedResource Include="Controls\AutomatedScreenshotsControl.resx">
+      <DependentUpon>AutomatedScreenshotsControl.cs</DependentUpon>
+    </EmbeddedResource>
     <EmbeddedResource Include="Controls\ScreenshotProjectControl.resx">
       <DependentUpon>ScreenshotProjectControl.cs</DependentUpon>
     </EmbeddedResource>

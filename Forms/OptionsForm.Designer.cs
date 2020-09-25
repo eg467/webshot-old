@@ -29,6 +29,11 @@
         private void InitializeComponent()
         {
             this.panel1 = new System.Windows.Forms.Panel();
+            this.pnlBasicAuth = new System.Windows.Forms.GroupBox();
+            this.lblCredsWarning = new System.Windows.Forms.Label();
+            this.lblCredsInstructions = new System.Windows.Forms.Label();
+            this.txtCreds = new System.Windows.Forms.TextBox();
+            this.label2 = new System.Windows.Forms.Label();
             this.btnResetOptions = new System.Windows.Forms.Button();
             this.lblProjectName = new System.Windows.Forms.Label();
             this.txtProjectName = new System.Windows.Forms.TextBox();
@@ -56,12 +61,12 @@
             this.numMobileWidth = new System.Windows.Forms.NumericUpDown();
             this.numTabletWidth = new System.Windows.Forms.NumericUpDown();
             this.numDesktopWidth = new System.Windows.Forms.NumericUpDown();
-            this.label2 = new System.Windows.Forms.Label();
-            this.pnlBasicAuth = new System.Windows.Forms.GroupBox();
-            this.txtCreds = new System.Windows.Forms.TextBox();
-            this.lblCredsInstructions = new System.Windows.Forms.Label();
-            this.lblCredsWarning = new System.Windows.Forms.Label();
+            this.tabScheduler = new System.Windows.Forms.TabPage();
+            this.cbScheduled = new System.Windows.Forms.CheckBox();
+            this.numScheduleInterval = new System.Windows.Forms.NumericUpDown();
+            this.label3 = new System.Windows.Forms.Label();
             this.panel1.SuspendLayout();
+            this.pnlBasicAuth.SuspendLayout();
             this.tabsSettings.SuspendLayout();
             this.tabSpider.SuspendLayout();
             this.tabDisplay.SuspendLayout();
@@ -74,7 +79,8 @@
             ((System.ComponentModel.ISupportInitialize)(this.numMobileWidth)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.numTabletWidth)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.numDesktopWidth)).BeginInit();
-            this.pnlBasicAuth.SuspendLayout();
+            this.tabScheduler.SuspendLayout();
+            ((System.ComponentModel.ISupportInitialize)(this.numScheduleInterval)).BeginInit();
             this.SuspendLayout();
             // 
             // panel1
@@ -90,6 +96,55 @@
             this.panel1.Name = "panel1";
             this.panel1.Size = new System.Drawing.Size(1284, 357);
             this.panel1.TabIndex = 0;
+            // 
+            // pnlBasicAuth
+            // 
+            this.pnlBasicAuth.Controls.Add(this.lblCredsWarning);
+            this.pnlBasicAuth.Controls.Add(this.lblCredsInstructions);
+            this.pnlBasicAuth.Controls.Add(this.txtCreds);
+            this.pnlBasicAuth.Location = new System.Drawing.Point(149, 6);
+            this.pnlBasicAuth.Name = "pnlBasicAuth";
+            this.pnlBasicAuth.Size = new System.Drawing.Size(589, 265);
+            this.pnlBasicAuth.TabIndex = 5;
+            this.pnlBasicAuth.TabStop = false;
+            this.pnlBasicAuth.Text = "BasicAuthentication";
+            // 
+            // lblCredsWarning
+            // 
+            this.lblCredsWarning.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(255)))), ((int)(((byte)(192)))), ((int)(((byte)(192)))));
+            this.lblCredsWarning.Font = new System.Drawing.Font("Microsoft Sans Serif", 8.142858F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.lblCredsWarning.Location = new System.Drawing.Point(7, 53);
+            this.lblCredsWarning.Name = "lblCredsWarning";
+            this.lblCredsWarning.Size = new System.Drawing.Size(576, 56);
+            this.lblCredsWarning.TabIndex = 2;
+            this.lblCredsWarning.Text = "WARNING: THESE WILL BE STORED IN PLAIN TEXT ON YOUR DISK. THIS ISN\'T TECHNICALLY " +
+    "SECURE.";
+            // 
+            // lblCredsInstructions
+            // 
+            this.lblCredsInstructions.AutoSize = true;
+            this.lblCredsInstructions.Location = new System.Drawing.Point(7, 26);
+            this.lblCredsInstructions.Name = "lblCredsInstructions";
+            this.lblCredsInstructions.Size = new System.Drawing.Size(550, 25);
+            this.lblCredsInstructions.TabIndex = 1;
+            this.lblCredsInstructions.Text = "Enter in form \'domain:user:password\', one per line per domain.";
+            // 
+            // txtCreds
+            // 
+            this.txtCreds.Location = new System.Drawing.Point(6, 112);
+            this.txtCreds.Multiline = true;
+            this.txtCreds.Name = "txtCreds";
+            this.txtCreds.Size = new System.Drawing.Size(577, 141);
+            this.txtCreds.TabIndex = 0;
+            // 
+            // label2
+            // 
+            this.label2.AutoSize = true;
+            this.label2.Location = new System.Drawing.Point(19, 70);
+            this.label2.Name = "label2";
+            this.label2.Size = new System.Drawing.Size(53, 25);
+            this.label2.TabIndex = 4;
+            this.label2.Text = "User";
             // 
             // btnResetOptions
             // 
@@ -132,6 +187,7 @@
             this.tabsSettings.Controls.Add(this.tabSpider);
             this.tabsSettings.Controls.Add(this.tabDisplay);
             this.tabsSettings.Controls.Add(this.tabScreenshots);
+            this.tabsSettings.Controls.Add(this.tabScheduler);
             this.tabsSettings.Dock = System.Windows.Forms.DockStyle.Fill;
             this.tabsSettings.Location = new System.Drawing.Point(0, 0);
             this.tabsSettings.Name = "tabsSettings";
@@ -296,6 +352,8 @@
             // cbStoreVersions
             // 
             this.cbStoreVersions.AutoSize = true;
+            this.cbStoreVersions.Checked = true;
+            this.cbStoreVersions.CheckState = System.Windows.Forms.CheckState.Checked;
             this.cbStoreVersions.Location = new System.Drawing.Point(20, 236);
             this.cbStoreVersions.Name = "cbStoreVersions";
             this.cbStoreVersions.Size = new System.Drawing.Size(303, 29);
@@ -393,54 +451,43 @@
             this.numDesktopWidth.TabIndex = 5;
             this.numDesktopWidth.Tag = "Desktop";
             // 
-            // label2
+            // tabScheduler
             // 
-            this.label2.AutoSize = true;
-            this.label2.Location = new System.Drawing.Point(19, 70);
-            this.label2.Name = "label2";
-            this.label2.Size = new System.Drawing.Size(53, 25);
-            this.label2.TabIndex = 4;
-            this.label2.Text = "User";
+            this.tabScheduler.Controls.Add(this.label3);
+            this.tabScheduler.Controls.Add(this.numScheduleInterval);
+            this.tabScheduler.Controls.Add(this.cbScheduled);
+            this.tabScheduler.Location = new System.Drawing.Point(4, 33);
+            this.tabScheduler.Name = "tabScheduler";
+            this.tabScheduler.Size = new System.Drawing.Size(1276, 656);
+            this.tabScheduler.TabIndex = 3;
+            this.tabScheduler.Text = "Scheduler";
+            this.tabScheduler.UseVisualStyleBackColor = true;
             // 
-            // pnlBasicAuth
+            // cbScheduled
             // 
-            this.pnlBasicAuth.Controls.Add(this.lblCredsWarning);
-            this.pnlBasicAuth.Controls.Add(this.lblCredsInstructions);
-            this.pnlBasicAuth.Controls.Add(this.txtCreds);
-            this.pnlBasicAuth.Location = new System.Drawing.Point(149, 6);
-            this.pnlBasicAuth.Name = "pnlBasicAuth";
-            this.pnlBasicAuth.Size = new System.Drawing.Size(589, 265);
-            this.pnlBasicAuth.TabIndex = 5;
-            this.pnlBasicAuth.TabStop = false;
-            this.pnlBasicAuth.Text = "BasicAuthentication";
+            this.cbScheduled.AutoSize = true;
+            this.cbScheduled.Location = new System.Drawing.Point(8, 17);
+            this.cbScheduled.Name = "cbScheduled";
+            this.cbScheduled.Size = new System.Drawing.Size(353, 29);
+            this.cbScheduled.TabIndex = 0;
+            this.cbScheduled.Text = "Automate screenshots via scheduler";
+            this.cbScheduled.UseVisualStyleBackColor = true;
             // 
-            // txtCreds
+            // numScheduleInterval
             // 
-            this.txtCreds.Location = new System.Drawing.Point(6, 112);
-            this.txtCreds.Multiline = true;
-            this.txtCreds.Name = "txtCreds";
-            this.txtCreds.Size = new System.Drawing.Size(577, 141);
-            this.txtCreds.TabIndex = 0;
+            this.numScheduleInterval.Location = new System.Drawing.Point(336, 65);
+            this.numScheduleInterval.Name = "numScheduleInterval";
+            this.numScheduleInterval.Size = new System.Drawing.Size(120, 29);
+            this.numScheduleInterval.TabIndex = 1;
             // 
-            // lblCredsInstructions
+            // label3
             // 
-            this.lblCredsInstructions.AutoSize = true;
-            this.lblCredsInstructions.Location = new System.Drawing.Point(7, 26);
-            this.lblCredsInstructions.Name = "lblCredsInstructions";
-            this.lblCredsInstructions.Size = new System.Drawing.Size(550, 25);
-            this.lblCredsInstructions.TabIndex = 1;
-            this.lblCredsInstructions.Text = "Enter in form \'domain:user:password\', one per line per domain.";
-            // 
-            // lblCredsWarning
-            // 
-            this.lblCredsWarning.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(255)))), ((int)(((byte)(192)))), ((int)(((byte)(192)))));
-            this.lblCredsWarning.Font = new System.Drawing.Font("Microsoft Sans Serif", 8.142858F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.lblCredsWarning.Location = new System.Drawing.Point(7, 53);
-            this.lblCredsWarning.Name = "lblCredsWarning";
-            this.lblCredsWarning.Size = new System.Drawing.Size(576, 56);
-            this.lblCredsWarning.TabIndex = 2;
-            this.lblCredsWarning.Text = "WARNING: THESE WILL BE STORED IN PLAIN TEXT ON YOUR DISK. THIS ISN\'T TECHNICALLY " +
-    "SECURE.";
+            this.label3.AutoSize = true;
+            this.label3.Location = new System.Drawing.Point(11, 67);
+            this.label3.Name = "label3";
+            this.label3.Size = new System.Drawing.Size(319, 25);
+            this.label3.TabIndex = 2;
+            this.label3.Text = "Take screenshots every N minutes:";
             // 
             // OptionsForm
             // 
@@ -451,9 +498,10 @@
             this.Controls.Add(this.panel1);
             this.Name = "OptionsForm";
             this.Text = "SettingsForm";
-            this.Load += new System.EventHandler(this.SettingsForm_Load);
             this.panel1.ResumeLayout(false);
             this.panel1.PerformLayout();
+            this.pnlBasicAuth.ResumeLayout(false);
+            this.pnlBasicAuth.PerformLayout();
             this.tabsSettings.ResumeLayout(false);
             this.tabSpider.ResumeLayout(false);
             this.tabSpider.PerformLayout();
@@ -471,8 +519,9 @@
             ((System.ComponentModel.ISupportInitialize)(this.numMobileWidth)).EndInit();
             ((System.ComponentModel.ISupportInitialize)(this.numTabletWidth)).EndInit();
             ((System.ComponentModel.ISupportInitialize)(this.numDesktopWidth)).EndInit();
-            this.pnlBasicAuth.ResumeLayout(false);
-            this.pnlBasicAuth.PerformLayout();
+            this.tabScheduler.ResumeLayout(false);
+            this.tabScheduler.PerformLayout();
+            ((System.ComponentModel.ISupportInitialize)(this.numScheduleInterval)).EndInit();
             this.ResumeLayout(false);
 
         }
@@ -512,5 +561,9 @@
         private System.Windows.Forms.Label label2;
         private System.Windows.Forms.Label lblCredsWarning;
         private System.Windows.Forms.Label lblCredsInstructions;
+        private System.Windows.Forms.TabPage tabScheduler;
+        private System.Windows.Forms.CheckBox cbScheduled;
+        private System.Windows.Forms.Label label3;
+        private System.Windows.Forms.NumericUpDown numScheduleInterval;
     }
 }

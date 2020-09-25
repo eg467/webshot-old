@@ -1,4 +1,6 @@
-﻿using System;
+﻿using Newtonsoft.Json;
+using Newtonsoft.Json.Converters;
+using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Diagnostics;
@@ -16,17 +18,20 @@ namespace Webshot
     public static class WebshotHttpClient
     {
         private static readonly HttpClientHandler HttpClientHandler = new HttpClientHandler();
+
+        public static ICredentials Credentials
+        {
+            get => HttpClientHandler.Credentials;
+            set => HttpClientHandler.Credentials = value;
+        }
+
         public static HttpClient Client { get; } = new HttpClient(HttpClientHandler);
 
         static WebshotHttpClient()
         {
+            // Identify as a bot user agent
             Client.DefaultRequestHeaders.UserAgent.Add(
                 new ProductInfoHeaderValue(nameof(Webshot), Application.ProductVersion));
-        }
-
-        public static void SetCredentials(ICredentials credentials)
-        {
-            HttpClientHandler.Credentials = credentials;
         }
     }
 
@@ -35,36 +40,32 @@ namespace Webshot
         private readonly LinkTracker _linkTracker = new LinkTracker();
         private readonly List<Uri> _seedUris;
         private readonly SpiderOptions _options;
-        private readonly ICredentials _credentials;
 
         public Spider(List<Uri> seedUris, SpiderOptions options, ProjectCredentials creds)
         {
-            this._seedUris = seedUris;
-            this._options = options;
+            _seedUris = seedUris;
+            _options = options;
+
             SetHttpClientCredentials(creds);
+            ConfigureUriCrawlValidators();
         }
 
         private void SetHttpClientCredentials(ProjectCredentials projectCreds)
         {
-            var myCache = new CredentialCache();
+            var credCache = new CredentialCache();
             projectCreds?.CredentialsByDomain?.ForEach(c =>
             {
-                var domainUrl =
-                    c.Key.Contains(Uri.SchemeDelimiter)
-                    ? c.Key : $"{Uri.UriSchemeHttps}{Uri.SchemeDelimiter}{c.Key}";
+                var domainUrl = c.Key.Contains("://") ? c.Key : $"https://{c.Key}";
                 var uri = new Uri(domainUrl);
                 var creds = new NetworkCredential(c.Value.User, c.Value.Password);
 
-                myCache.Add(uri, "Basic", creds);
+                credCache.Add(uri, "Basic", creds);
             });
-            WebshotHttpClient.SetCredentials(myCache);
+            WebshotHttpClient.Credentials = credCache;
         }
 
-        public async Task<CrawlResults> Crawl(
-            IProgress<TaskProgress> progress = null)
-        {
-            return await Crawl(CancellationToken.None, progress);
-        }
+        public async Task<CrawlResults> Crawl(IProgress<TaskProgress> progress = null) =>
+            await Crawl(CancellationToken.None, progress);
 
         public async Task<CrawlResults> Crawl(
             CancellationToken token,
@@ -75,15 +76,15 @@ namespace Webshot
 
             while (_linkTracker.TryNextUnvisited(out StandardizedUri unvisited))
             {
-                Debug.WriteLine($"Parsing {unvisited}");
+                Debug.WriteLine($"Parsing {unvisited.Standardized.AbsoluteUri}");
 
                 if (token.IsCancellationRequested)
                 {
-                    throw new OperationCanceledException();
+                    throw new TaskCanceledException();
                 }
 
                 var currentProgress = new TaskProgress(
-                    _linkTracker.Count(u => u.Status != VisitationStatus.Unvisited),
+                    _linkTracker.Count(u => u.Status != SpiderPageStatus.Unvisited),
                     _linkTracker.Count(),
                     unvisited.Standardized.ToString());
 
@@ -91,6 +92,9 @@ namespace Webshot
 
                 await Visit(unvisited);
             }
+
+            TaskProgress completionProgress = new TaskProgress(_linkTracker.Count(), _linkTracker.Count(), "Complete");
+            progress?.Report(completionProgress);
 
             return _linkTracker.ToCrawlResults();
         }
@@ -103,30 +107,30 @@ namespace Webshot
             {
                 (Uri finalUri, string content) = await DownloadPageAsync(uri.Standardized);
                 html = content;
-                sources = _linkTracker.Redirect(uri, finalUri);
+                sources = _linkTracker.CombineIfRedirection(uri, finalUri);
             }
             catch (HttpRequestException ex)
             {
                 sources = _linkTracker.GetOrCreateSources(uri);
-                sources.Status = VisitationStatus.Error;
+                sources.Status = SpiderPageStatus.Error;
                 sources.Error = ex.Message;
                 Debug.WriteLine($"Error downloading page ({uri}): {ex.Message}");
             }
 
-            if (sources.Status != VisitationStatus.Unvisited)
+            if (sources.Status != SpiderPageStatus.Unvisited) return;
+
+            if (!IsHtml(html))
             {
+                sources.Status = SpiderPageStatus.Excluded;
                 return;
             }
 
-            if (!ContentValid(html))
-            {
-                sources.Status = VisitationStatus.Excluded;
-                return;
-            }
+            sources.Status = SpiderPageStatus.Visited;
 
-            sources.Status = VisitationStatus.Visited;
-            ParseLinks(sources.Uri.Uri, html)
-                .ForEach(FoundLink);
+            if (_options.FollowLinks)
+            {
+                ParseLinks(sources.Uri.Uri, html).ForEach(FoundLink);
+            }
         }
 
         private static IEnumerable<Link> ParseLinks(Uri callingPage, string html) =>
@@ -139,16 +143,16 @@ namespace Webshot
         /// </summary>
         /// <param name="uri">The URI of the page to download</param>
         /// <returns>A tuple of the Uri of the final page (after redirection), and its HTML contents.</returns>
-        private async Task<Tuple<Uri, string>> DownloadPageAsync(Uri uri)
+        private async Task<(Uri finalPage, string contents)> DownloadPageAsync(Uri uri)
         {
             using (HttpResponseMessage response = await WebshotHttpClient.Client.GetAsync(uri))
             {
-                var finalUri = response.RequestMessage.RequestUri;
                 response.EnsureSuccessStatusCode();
                 using (HttpContent content = response.Content)
                 {
+                    var finalUri = response.RequestMessage.RequestUri;
                     string result = await content.ReadAsStringAsync();
-                    return new Tuple<Uri, string>(finalUri, result);
+                    return (finalUri, result);
                 }
             }
         }
@@ -161,16 +165,9 @@ namespace Webshot
 
         private bool ShouldVisit(Uri uri)
         {
-            if (uri == null || !TrackedScheme(uri.Scheme))
-            {
-                return false;
-            }
-
             try
             {
-                return IsTrackedHost(uri)
-                    && HardCodedValidUri(uri)
-                    && ProjectValidUri(uri);
+                return ValidateUri(uri);
             }
             catch (UriFormatException e)
             {
@@ -179,75 +176,151 @@ namespace Webshot
             }
         }
 
-        private bool IsTrackedHost(Uri uri) =>
-            !uri.IsAbsoluteUri
-            || _options.FollowExternalLinks
-            || _seedUris.Any(u => string.Equals(uri.Host, u.Host, StringComparison.OrdinalIgnoreCase));
+        private readonly List<UriCrawlValidator> _uriCrawlValidators = new List<UriCrawlValidator>();
 
-        /// <summary>
-        /// Match hard-coded pattern that exludes URIs of non-html pages.
-        /// </summary>
-        /// <param name="uri"></param>
-        /// <returns></returns>
-        private bool HardCodedValidUri(Uri uri)
+        private void ConfigureUriCrawlValidators()
         {
-            // Check if last three path segments repeat
-            // because WordPress can allow infinite recursion with poorly formed links.
-            // e.g. https://example.com/page/page/page/.../
+            _uriCrawlValidators.Clear();
+            Action<UriCrawlValidator> Add = _uriCrawlValidators.Add;
+            if (!_options.TrackExternalLinks)
+            {
+                Add(new UriInTrackedDomainValidator(_seedUris));
+            }
 
-            // The maximum allowable number of repetitions at the end of the path.
-            var maxRecursionLevels = 2;
+            if (!string.IsNullOrWhiteSpace(_options.UriBlacklistPattern))
+            {
+                Add(new UriRegexValidator(_options.UriBlacklistPattern, UriCrawlValidatorType.Blacklist));
+            }
 
-            var recursionCheckDesired = maxRecursionLevels >= 1;
-            var illegalRecursionPossible = uri.Segments.Length > maxRecursionLevels + 1;
-
-            var hasRecursed =
-                recursionCheckDesired
-                && illegalRecursionPossible
-                && uri.Segments
-                    .Skip(uri.Segments.Length - maxRecursionLevels)
-                    .Select(s => s.TrimEnd('/'))
-                    .Unanimous();
-
-            var excludedProtocols = "tel|mailto";
-            var excludedExtensions = "css|png|pdf";
-
-            var isBlacklisted = Regex.IsMatch(
-                uri.ToString(),
-                $@"({excludedProtocols}|\.({excludedExtensions})$)");
-
-            return !hasRecursed && !isBlacklisted;
+            Add(new UriRecursionValidator());
+            Add(new PermittedUriSchemeValidator("http", "https"));
+            Add(new ForbiddenUriExtensionValidator("css", "png", "jpg", "jpeg", "js", "pdf"));
         }
 
-        /// <summary>
-        /// Match project settings
-        /// </summary>
-        /// <param name="uri"></param>
-        /// <returns></returns>
-        private bool ProjectValidUri(Uri uri) =>
-            string.IsNullOrEmpty(_options.UriBlacklistPattern)
-            || !Regex.IsMatch(uri.ToString(), _options.UriBlacklistPattern);
+        private bool ValidateUri(Uri uri) =>
+            !string.IsNullOrEmpty(uri?.AbsoluteUri)
+            && _uriCrawlValidators.All(v => v.Validate(uri));
 
-        private static bool ContentValid(string content)
-        {
-            return content.IndexOf("<html", StringComparison.OrdinalIgnoreCase) >= 0;
-        }
+        private static bool IsHtml(string content) =>
+            content.IndexOf("<html", StringComparison.OrdinalIgnoreCase) >= 0;
 
         private void FoundLink(Link link)
         {
             var sources = _linkTracker.GetOrCreateSources(link.Target);
             sources.CallingLinks.Add(link);
 
-            if (sources.Status != VisitationStatus.Excluded
+            if (sources.Status != SpiderPageStatus.Excluded
                 && !ShouldVisit(sources.Uri.Standardized))
             {
-                sources.Status = VisitationStatus.Excluded;
+                sources.Status = SpiderPageStatus.Excluded;
             }
         }
 
         public void Dispose()
         {
-            WebshotHttpClient.SetCredentials(null);
+            WebshotHttpClient.Credentials = null;
+        }
+    }
+
+    /// <summary>
+    /// Determines if a url should be validated.
+    /// </summary>
+    internal abstract class UriCrawlValidator
+    {
+        public abstract bool Validate(Uri uri);
+    }
+
+    internal class UriInTrackedDomainValidator : UriCrawlValidator
+    {
+        private readonly List<Uri> _seedUris;
+
+        public UriInTrackedDomainValidator(List<Uri> seedUris)
+        {
+            _seedUris = seedUris;
+        }
+
+        public override bool Validate(Uri uri)
+        {
+            bool MatchesHost(Uri u) =>
+                string.Equals(uri.Host, u.Host, StringComparison.OrdinalIgnoreCase);
+            return !uri.IsAbsoluteUri || _seedUris.Any(MatchesHost);
+        }
+    }
+
+    /// <summary>
+    /// Check if last N path segments repeat
+    /// because WordPress can generate infinite recursion with poorly formed links.
+    /// e.g. https://example.com/page/page/page/.../
+    /// </summary>
+    internal class UriRecursionValidator : UriCrawlValidator
+    {
+        private readonly int _maxRecursionLevel;
+
+        public UriRecursionValidator(int maxRecursionLevel = 2)
+        {
+            _maxRecursionLevel = maxRecursionLevel;
+        }
+
+        public override bool Validate(Uri uri)
+        {
+            var recursionCheckDesired = _maxRecursionLevel >= 1;
+            var illegalRecursionPossible = uri.Segments.Length > _maxRecursionLevel + 1;
+
+            var hasRecursed =
+                recursionCheckDesired
+                && illegalRecursionPossible
+                && uri.Segments
+                    .Skip(uri.Segments.Length - _maxRecursionLevel)
+                    .Select(s => s.TrimEnd('/'))
+                    .Unanimous();
+            return !hasRecursed;
+        }
+    }
+
+    internal enum UriCrawlValidatorType { Whitelist, Blacklist }
+
+    internal class UriRegexValidator : UriCrawlValidator
+    {
+        private readonly string _pattern;
+        private readonly bool _caseSensitive;
+
+        /// <summary>
+        /// True to include the matched pattern, false to reject a matching pattern.
+        /// </summary>
+        private readonly UriCrawlValidatorType _isWhitelist;
+
+        public UriRegexValidator(string pattern, UriCrawlValidatorType isWhitelist = UriCrawlValidatorType.Whitelist, bool caseSensitive = false)
+        {
+            _pattern = pattern;
+            _caseSensitive = caseSensitive;
+            _isWhitelist = isWhitelist;
+        }
+
+        public override bool Validate(Uri uri)
+        {
+            var options = _caseSensitive ? RegexOptions.IgnoreCase : RegexOptions.None;
+            var isMatch = Regex.IsMatch(uri.AbsoluteUri, _pattern, options);
+            return _isWhitelist == UriCrawlValidatorType.Whitelist ? isMatch : !isMatch;
+        }
+    }
+
+    internal class ForbiddenUriExtensionValidator : UriRegexValidator
+    {
+        /// <summary>
+        ///
+        /// </summary>
+        /// <param name="extensionBlacklist">Forbidden URI extensions, not including periods.</param>
+        public ForbiddenUriExtensionValidator(params string[] extensionBlacklist)
+            : base($@"\.({string.Join("|", extensionBlacklist)})\b", UriCrawlValidatorType.Blacklist)
+        {
+        }
+    }
+
+    internal class PermittedUriSchemeValidator : UriRegexValidator
+    {
+        public PermittedUriSchemeValidator(params string[] schemeWhitelist)
+            : base($@"^{string.Join("|", schemeWhitelist)}:", UriCrawlValidatorType.Whitelist)
+        {
         }
     }
 
@@ -316,14 +389,15 @@ namespace Webshot
         public override int GetHashCode() => Standardized.GetHashCode();
     }
 
-    public enum VisitationStatus
+    [JsonConverter(typeof(StringEnumConverter))]
+    public enum SpiderPageStatus
     {
         Visited, Unvisited, Excluded, Redirected, Error
     }
 
     public class UriSources
     {
-        public VisitationStatus Status { get; set; } = VisitationStatus.Unvisited;
+        public SpiderPageStatus Status { get; set; } = SpiderPageStatus.Unvisited;
         public StandardizedUri Uri { get; set; }
         public Uri RedirectedUri { get; set; }
 
@@ -368,7 +442,7 @@ namespace Webshot
 
         public List<BrokenLink> BrokenLinks =>
             _uris
-            .Where(x => x.Value.Status == VisitationStatus.Error)
+            .Where(x => x.Value.Status == SpiderPageStatus.Error)
             .Select(x => new BrokenLink()
             {
                 Error = x.Value.Error,
@@ -377,13 +451,13 @@ namespace Webshot
             })
             .ToList();
 
-        public Dictionary<Uri, VisitationStatus> ByStatus =>
+        public Dictionary<Uri, SpiderPageStatus> ByStatus =>
             _uris
             .ToDictionary(x => x.Key.Standardized, x => x.Value.Status);
 
         public List<Uri> AvailableWebPages() =>
             _uris
-            .Where(x => x.Value.Status == VisitationStatus.Visited)
+            .Where(x => x.Value.Status == SpiderPageStatus.Visited)
             .Select(x => x.Key.Standardized)
             .ToList();
 
@@ -400,7 +474,7 @@ namespace Webshot
             return sources;
         }
 
-        public UriSources Redirect(StandardizedUri sourceUri, Uri redirectionTarget)
+        public UriSources CombineIfRedirection(StandardizedUri sourceUri, Uri redirectionTarget)
         {
             var src = GetOrCreateSources(sourceUri);
             var stdDestUri = new StandardizedUri(redirectionTarget);
@@ -412,7 +486,10 @@ namespace Webshot
                 return src;
             }
 
-            src.Status = VisitationStatus.Redirected;
+            // The request has been redirected,
+            // so the source and destination pages should be considered equivalent.
+            // Combine the pages that point to either.
+            src.Status = SpiderPageStatus.Redirected;
 
             var dest = GetOrCreateSources(stdDestUri);
             var combinedLinks = src.CallingLinks.Union(dest.CallingLinks).ToHashSet();
@@ -425,10 +502,10 @@ namespace Webshot
         public bool TryNextUnvisited(out StandardizedUri uri)
         {
             uri = _uris
-                .Where(x => x.Value.Status == VisitationStatus.Unvisited)
+                .Where(x => x.Value.Status == SpiderPageStatus.Unvisited)
                 .Select(x => x.Key)
                 .FirstOrDefault();
-            return uri != null;
+            return uri is object;
         }
     }
 }

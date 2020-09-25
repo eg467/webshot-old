@@ -12,7 +12,5 @@
           new ViewerOptions();
 
         public ProjectCredentials Credentials { get; set; } = new ProjectCredentials();
-
-        public SchedulerOptions SchedulerOptions { get; set; } = new SchedulerOptions();
     }
 }

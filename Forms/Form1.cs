@@ -1,9 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Windows.Forms;
 using Webshot.Forms;
+using Webshot.Store;
 
 namespace Webshot
 {
@@ -14,109 +16,60 @@ namespace Webshot
 
     public partial class Form1 : Form
     {
-        public event EventHandler<ProjectFileEventArgs> CreateProject;
+        //public bool DisableUi
+        //{
+        //    get => this.btnCancelTask.Enabled;
+        //    set
+        //    {
+        //        this.btnCancelTask.Enabled = value;
+        //        this.pnlCrawl.Enabled = !value;
+        //        this.pnlSelectedPages.Enabled = !value;
+        //        this.pnlProjectSelection.Enabled = !value;
 
-        public event EventHandler<ProjectFileEventArgs> LoadProject;
+        //        if (!value)
+        //        {
+        //            this.progressBar.Value = 0;
+        //            this.progressBar.Maximum = 0;
+        //            this.lblStatus.Text = "";
+        //        }
+        //    }
+        //}
 
-        public event EventHandler<SelectedUrisChangedEventArgs> SelectedUrisChanged;
+        private readonly IProgress<TaskProgress> _progress;
 
-        public event EventHandler ProjectNameChanged;
+        private DebouncedProjectSaver DebouncedProjectSaver =>
+            this.projectControl.DebouncedProjectSaver;
 
-        public event EventHandler SaveProject;
-
-        public event EventHandler SiteCrawlRequest;
-
-        public event EventHandler ScreenshotRequest;
-
-        public event EventHandler CancelTask;
-
-        public event EventHandler ShowOptions;
-
-        public event EventHandler ShowResults;
-
-        public bool DisableUi
+        private Project Project
         {
-            get => this.btnCancelTask.Enabled;
+            get => this.projectControl.Project;
             set
             {
-                this.btnCancelTask.Enabled = value;
-                this.pnlCrawl.Enabled = !value;
-                this.pnlSelectedPages.Enabled = !value;
-                this.pnlProjectSelection.Enabled = !value;
-
-                if (!value)
+                if (Project is object)
                 {
-                    this.progressBar.Value = 0;
-                    this.progressBar.Maximum = 0;
-                    this.lblStatus.Text = "";
+                    Project.Store.Saved -= ProjectSaved;
+                }
+                this.projectControl.Project = value;
+                if (value is object)
+                {
+                    value.Store.Saved += ProjectSaved;
                 }
             }
         }
 
-        public bool IsProjectLoaded
+        private void ProjectSaved(object sender, ProjectSavedEventArgs e)
         {
-            get => this.pnlProjectMain.Visible;
-            set => this.pnlProjectMain.Visible = value;
+            FlashProjectSaved();
         }
 
-        public string ProjectName
-        {
-            get => this.txtProjectName.Text;
-            set { this.txtProjectName.Text = value; }
-        }
-
-        public string ProjectPath
-        {
-            get => this.lnkProjectLocation.Text;
-            set { this.lnkProjectLocation.Text = value; }
-        }
-
-        public IEnumerable<Uri> SpiderSeedUris
-        {
-            get => this.txtSpiderSeedUris.Text
-                .Split(
-                    new[] { Environment.NewLine },
-                    StringSplitOptions.RemoveEmptyEntries)
-                .Select(u => !u.Contains("://") ? $"https://{u}" : u)
-                .Select(u => new Uri(u))
-                .ToList();
-            set
-            {
-                this.txtSpiderSeedUris.Text = string.Join(Environment.NewLine, value);
-            }
-        }
-
-        public List<BrokenLink> BrokenLinks
-        {
-            get => this.btnBrokenLinks.Tag as List<BrokenLink>;
-            set
-            {
-                this.btnBrokenLinks.Tag = value ?? new List<BrokenLink>();
-                this.btnBrokenLinks.Visible = value.Any();
-            }
-        }
-
-        public IEnumerable<Uri> SelectedUris =>
-            ScreenshotUris.Where(x => x.Item2).Select(x => x.Item1);
-
-        public IEnumerable<(Uri, bool)> ScreenshotUris
-        {
-            get => this.clbSelectedUris.Items.Cast<Uri>()
-                    .Select((x, idx) => (x, this.clbSelectedUris.GetItemChecked(idx)));
-            set
-            {
-                this.clbSelectedUris.Items.Clear();
-                value.ForEach(x =>
-                {
-                    (Uri uri, bool enabled) = x;
-                    this.clbSelectedUris.Items.Add(uri, enabled);
-                });
-            }
-        }
+        private FileProjectStore ProjectStore => this.projectControl.ProjectStore;
 
         public Form1()
         {
             InitializeComponent();
+            _progress = new Progress<TaskProgress>(UpdateProgress);
+            this.projectControl.Progress = _progress;
+            RefreshRecentProjects();
         }
 
         private void Form1_Load(object sender, EventArgs e)
@@ -126,11 +79,7 @@ namespace Webshot
         public void HideThenFlashProjectSaved()
         {
             this.lblProjectSaved.Visible = false;
-            void ShowDisplay()
-            {
-                FlashProjectSaved();
-            }
-            new Debouncer(ShowDisplay, 500, 1).Call();
+            new Debouncer(FlashProjectSaved, 500, 1).Call();
         }
 
         public void FlashProjectSaved()
@@ -138,24 +87,24 @@ namespace Webshot
             if (this.lblProjectSaved.Visible)
             {
                 HideThenFlashProjectSaved();
+                return;
             }
 
             this.lblProjectSaved.Visible = true;
-            void HideDisplay()
-            {
-                this.lblProjectSaved.Visible = false;
-            }
+            void HideDisplay() => this.lblProjectSaved.Visible = false;
             new Debouncer(HideDisplay, 2000, 1).Call();
         }
 
-        public void RefreshRecentProjects(IEnumerable<string> projectPaths)
+        public void RefreshRecentProjects()
         {
-            var items = projectPaths
+            var recentProjects = Properties.Settings.Default.RecentProjects
+                .Cast<string>()
+                .Where(Directory.Exists)
                 .Select(p =>
                     new ToolStripButton(
                         p,
                         null,
-                        (s, e) => OnLoadProject(new ProjectFileEventArgs(p)))
+                        (_, __) => LoadOrCreateProject(p))
                     {
                         Size = new System.Drawing.Size(800, 30),
                         TextAlign = System.Drawing.ContentAlignment.MiddleLeft,
@@ -163,57 +112,20 @@ namespace Webshot
                     })
                 .ToArray();
 
-            this.btnRecentProjects.DropDownItems.AddRange(items);
+            this.btnRecentProjects.DropDownItems.AddRange(recentProjects);
         }
 
-        protected void OnLoadProject(ProjectFileEventArgs args)
+        public void LoadOrCreateProject(string projectDirectory)
         {
-            LoadProject?.Invoke(this, args);
+            var store = new FileProjectStore(projectDirectory);
+            Project = store.Load();
+
+            RefreshRecentProjects();
         }
 
-        protected void OnCreateProject(ProjectFileEventArgs args)
+        protected void SaveProject()
         {
-            CreateProject?.Invoke(this, args);
-        }
-
-        protected void OnSaveProject()
-        {
-            SaveProject?.Invoke(this, EventArgs.Empty);
-        }
-
-        protected void OnSiteCrawlRequest()
-        {
-            SiteCrawlRequest?.Invoke(this, EventArgs.Empty);
-        }
-
-        protected void OnScreenshotRequest()
-        {
-            ScreenshotRequest?.Invoke(this, EventArgs.Empty);
-        }
-
-        protected void OnCancelTask()
-        {
-            CancelTask?.Invoke(this, EventArgs.Empty);
-        }
-
-        protected void OnSelectedUrisChanged(SelectedUrisChangedEventArgs args)
-        {
-            SelectedUrisChanged?.Invoke(this, args);
-        }
-
-        protected void OnProjectNameChanged()
-        {
-            ProjectNameChanged?.Invoke(this, EventArgs.Empty);
-        }
-
-        protected void OnShowOptions()
-        {
-            ShowOptions?.Invoke(this, EventArgs.Empty);
-        }
-
-        protected void OnShowResults()
-        {
-            ShowResults?.Invoke(this, EventArgs.Empty);
+            DebouncedProjectSaver.Save();
         }
 
         public string ChooseSaveFileDialog()
@@ -224,23 +136,23 @@ namespace Webshot
                 : null;
         }
 
-        public void LoadProjectDirectory()
+        public string ChooseExistingProjectDirectory()
         {
             var lastDir = Properties.Settings.Default.OutputDir;
             var currentDir = Path.GetDirectoryName(typeof(Form1).Assembly.Location);
             var defaultDir = Path.Combine(currentDir, "Projects");
             this.openProjectFileDialog.InitialDirectory = lastDir ?? defaultDir;
-            if (DialogResult.OK == this.openProjectFileDialog.ShowDialog())
-            {
-                string selectedPath = this.openProjectFileDialog.FileName;
-                var args = new ProjectFileEventArgs(selectedPath);
-                OnLoadProject(args);
-            };
+            if (DialogResult.OK != this.openProjectFileDialog.ShowDialog()) return null;
+
+            var projectFilePath = this.openProjectFileDialog.FileName;
+            return Path.GetDirectoryName(projectFilePath);
         }
 
-        private void BtnStartCrawl_Click(object sender, EventArgs e)
+        public void LoadProjectDirectory()
         {
-            OnSiteCrawlRequest();
+            var dir = ChooseExistingProjectDirectory();
+            if (dir is null) return;
+            LoadOrCreateProject(dir);
         }
 
         public void UpdateProgress(TaskProgress progress)
@@ -253,114 +165,64 @@ namespace Webshot
             }));
         }
 
-        private void BtnStartScreenshots_Click(object sender, EventArgs e)
-        {
-            OnScreenshotRequest();
-        }
-
-        private void BtnCancel_Click(object sender, EventArgs e)
-        {
-            OnCancelTask();
-        }
-
         private void BtnSaveProject_Click(object sender, EventArgs e)
         {
-            OnSaveProject();
+            SaveProject();
         }
 
         private void BtnCancelTask_Click(object sender, EventArgs e)
         {
-            OnCancelTask();
+            this.projectControl.Cancel();
         }
 
         private void BtnOpenProject_Click(object sender, EventArgs e)
         {
             this.openProjectFileDialog.Filter =
                 $"Webshot Project|{FileProjectStore.ProjectFilename}";
-            if (DialogResult.OK == this.openProjectFileDialog.ShowDialog())
-            {
-                var projFilePath = this.openProjectFileDialog.FileName;
-                var projectDir = Path.GetDirectoryName(projFilePath);
-                var args = new ProjectFileEventArgs(projectDir);
-                OnLoadProject(args);
-            }
-        }
-
-        private void ShowProjectInExplorer()
-        {
-            System.Diagnostics.Process.Start(ProjectPath);
+            if (DialogResult.OK != this.openProjectFileDialog.ShowDialog()) return;
+            var projFilePath = this.openProjectFileDialog.FileName;
+            var projectDir = Path.GetDirectoryName(projFilePath);
+            LoadOrCreateProject(projectDir);
         }
 
         private void OptionsToolStripMenuItem_Click(object sender, EventArgs e)
         {
-            OnShowOptions();
-        }
-
-        private void LnkProjectLocation_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
-        {
-            ShowProjectInExplorer();
+            var form = new OptionsForm(ProjectStore.ProjectDir);
+            form.ShowDialog();
         }
 
         private void BtnViewProjectFolder_Click(object sender, EventArgs e)
         {
-            ShowProjectInExplorer();
-        }
-
-        public string ChooseProjectFolder() =>
-            (DialogResult.OK == this.folderOpenProject.ShowDialog())
-            ? this.folderOpenProject.SelectedPath
-            : null;
-
-        private void TxtProjectName_TextChanged(object sender, EventArgs e)
-        {
-            OnProjectNameChanged();
+            if (ProjectStore is null) return;
+            Process.Start(ProjectStore.ProjectDir);
         }
 
         private void BtnShowResults_Click(object sender, EventArgs e)
         {
-            OnShowResults();
+            if (ProjectStore is null) return;
+            Dictionary<string, ScreenshotResults> screenshots = ProjectStore.GetAllResults();
+            var controller = new ViewResultsFormController(DebouncedProjectSaver, screenshots);
+            var form = controller.CreateForm();
+            form.ShowDialog();
         }
 
         private void BtnQuickCreateProject_Click(object sender, EventArgs e)
         {
             var folder = FileProjectStore.CreateTempProjectDirectory(temporaryDir: false);
-            var args = new ProjectFileEventArgs(folder);
-            OnCreateProject(args);
+            LoadOrCreateProject(folder);
         }
 
         private void BtnCreateProject_Click(object sender, EventArgs e)
         {
-            string folder = ChooseProjectFolder();
-            if (folder is null) return;
-            var args = new ProjectFileEventArgs(folder);
-            OnCreateProject(args);
+            var dialogResult = this.folderOpenProject.ShowDialog();
+            if (dialogResult != DialogResult.OK) return;
+            string folder = this.folderOpenProject.SelectedPath;
+            if (!Directory.Exists(folder)) return;
+            LoadOrCreateProject(folder);
         }
 
-        private void btnBrokenLinks_Click(object sender, EventArgs e)
+        private void btnRefresh_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
         {
-            var frm = new BrokenLinksForm();
-            frm.UpdateLinks(BrokenLinks);
-            frm.ShowDialog();
-        }
-    }
-
-    public class ProjectFileEventArgs : EventArgs
-    {
-        public string Path { get; set; }
-
-        public ProjectFileEventArgs(string path)
-        {
-            this.Path = path;
-        }
-    }
-
-    public class SelectedUrisChangedEventArgs : EventArgs
-    {
-        public IEnumerable<Uri> SelectedUris { get; }
-
-        public SelectedUrisChangedEventArgs(IEnumerable<Uri> selectedUris)
-        {
-            SelectedUris = selectedUris;
         }
     }
 }
