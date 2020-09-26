@@ -163,6 +163,7 @@
                 li.appendChild(nameLabel);
 
                 const pageContainer = document.createElement("ol");
+                pageContainer.setAttribute("type", "i");
                 li.appendChild(pageContainer);
 
                 projects[i].PageData.forEach((p, pageIdx) => {
@@ -188,7 +189,7 @@
                 },
                 { name: "HTTP Setup", selector: t => t.RequestStart - t.FetchStart },
                 { name: "Request", selector: t => t.ResponseStart - t.RequestStart },
-                { name: "Response", selector: t => t.ResponseEnd - t.ResponseStart },
+                { name: "TTFB", selector: t => t.ResponseStart - t.FetchStart },
 
                 // These can be faulty. fallback if any are non-zero, but they will still be inaccurate.
                 { name: "Processing", selector: t => (t.DomComplete || t.DomContentLoadedEventEnd) - t.ResponseStart },

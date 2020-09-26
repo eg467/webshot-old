@@ -6,10 +6,11 @@ using System.Diagnostics;
 using System.IO;
 using Newtonsoft.Json;
 using System.Text.RegularExpressions;
+using System.Security.Cryptography;
 
 namespace Webshot
 {
-    internal static class Utils
+    public static class Utils
     {
         public static string SanitizeFilename(string filename)
         {
@@ -261,6 +262,71 @@ namespace Webshot
         {
             var serialized = JsonConvert.SerializeObject(obj);
             return JsonConvert.DeserializeObject<T>(serialized);
+        }
+    }
+
+    /// <summary>
+    /// Encryption methods derived from: https://docs.microsoft.com/en-us/dotnet/api/system.security.cryptography.protecteddata?redirectedfrom=MSDN&view=dotnet-plat-ext-3.1
+    /// </summary>
+    public static class Encryption
+    {
+        private static byte[] s_additionalEntropy = { 7, 2, 56, 72, 2, 2, 23, 3, 3, 4, 1, 67 };
+
+        /// <summary>
+        /// Encrypts plain-text string to a base64-encoded, encrypted string.
+        /// </summary>
+        /// <param name="data"></param>
+        /// <returns></returns>
+        public static string Protect(string data)
+        {
+            var encoding = new System.Text.UTF8Encoding();
+            byte[] input = encoding.GetBytes(data);
+            var encrypted = Protect(input);
+            return Convert.ToBase64String(encrypted); ;
+        }
+
+        /// <summary>
+        /// Decrypts a base64-encoded, encrypted string.
+        /// </summary>
+        /// <param name="data"></param>
+        /// <returns></returns>
+        public static string Unprotect(string data)
+        {
+            byte[] input = Convert.FromBase64String(data);
+            var decrypted = Unprotect(input);
+            var encoding = new System.Text.UTF8Encoding();
+            return encoding.GetString(decrypted);
+        }
+
+        public static byte[] Protect(byte[] data)
+        {
+            try
+            {
+                // Encrypt the data using DataProtectionScope.CurrentUser. The result can be decrypted
+                // only by the same current user.
+                return ProtectedData.Protect(data, s_additionalEntropy, DataProtectionScope.CurrentUser);
+            }
+            catch (CryptographicException e)
+            {
+                Console.WriteLine("Data was not encrypted. An error occurred.");
+                Console.WriteLine(e.ToString());
+                return null;
+            }
+        }
+
+        public static byte[] Unprotect(byte[] data)
+        {
+            try
+            {
+                //Decrypt the data using DataProtectionScope.CurrentUser.
+                return ProtectedData.Unprotect(data, s_additionalEntropy, DataProtectionScope.CurrentUser);
+            }
+            catch (CryptographicException e)
+            {
+                Console.WriteLine("Data was not decrypted. An error occurred.");
+                Console.WriteLine(e.ToString());
+                return null;
+            }
         }
     }
 }

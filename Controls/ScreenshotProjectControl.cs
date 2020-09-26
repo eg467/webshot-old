@@ -198,6 +198,9 @@ namespace Webshot.Controls
                 .Select(x => (x, true))
                 .ToList();
             Project.Save();
+
+            SiteUrisUi = Project.Input.SiteUris;
+
         }
 
         /// <summary>

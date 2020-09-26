@@ -19,19 +19,32 @@ namespace Webshot
     {
         private static readonly HttpClientHandler HttpClientHandler = new HttpClientHandler();
 
-        public static ICredentials Credentials
+        // This can't be edited after sending a request
+        public static CredentialCache Credentials
         {
-            get => HttpClientHandler.Credentials;
+            get => HttpClientHandler.Credentials as CredentialCache;
             set => HttpClientHandler.Credentials = value;
         }
 
-        public static HttpClient Client { get; } = new HttpClient(HttpClientHandler);
+        public static readonly HttpClient Client = new HttpClient(HttpClientHandler);
+
+        private static readonly CredentialCache _credentialCache = new CredentialCache();
 
         static WebshotHttpClient()
         {
+            HttpClientHandler.Credentials = _credentialCache;
+
             // Identify as a bot user agent
             Client.DefaultRequestHeaders.UserAgent.Add(
                 new ProductInfoHeaderValue(nameof(Webshot), Application.ProductVersion));
+        }
+
+        public static void AddCredential(Uri host, NetworkCredential credential)
+        {
+            if (_credentialCache.GetCredential(host, "Basic") is null)
+            {
+                _credentialCache.Add(host, "Basic", credential);
+            }
         }
     }
 
@@ -50,18 +63,22 @@ namespace Webshot
             ConfigureUriCrawlValidators();
         }
 
+        //private CredentialCache _credentialCache;
+
         private void SetHttpClientCredentials(ProjectCredentials projectCreds)
         {
-            var credCache = new CredentialCache();
+            //var credCache = new CredentialCache();
             projectCreds?.CredentialsByDomain?.ForEach(c =>
             {
                 var domainUrl = c.Key.Contains("://") ? c.Key : $"https://{c.Key}";
                 var uri = new Uri(domainUrl);
                 var creds = new NetworkCredential(c.Value.User, c.Value.Password);
 
-                credCache.Add(uri, "Basic", creds);
+                WebshotHttpClient.AddCredential(uri, creds);
+                //_credentialCache.Add(uri, "Basic", creds);
             });
-            WebshotHttpClient.Credentials = credCache;
+
+            //WebshotHttpClient.Credentials = credCache;
         }
 
         public async Task<CrawlResults> Crawl(IProgress<TaskProgress> progress = null) =>

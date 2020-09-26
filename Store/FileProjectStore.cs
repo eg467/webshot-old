@@ -163,6 +163,7 @@ namespace Webshot
 
         public ScreenshotResults GetSessionResults(string sessionId)
         {
+            Directory.CreateDirectory(ScreenshotDir);
             string path = Path.Combine(ScreenshotDir, sessionId);
             return SessionResultsFromDir(path);
         }
@@ -171,6 +172,8 @@ namespace Webshot
         {
             string GetSessionId(string manifestPath) =>
                 Path.GetFileName(Path.GetDirectoryName(manifestPath));
+
+            Directory.CreateDirectory(ScreenshotDir);
 
             // Each subdirectory under the output directory represents a session of screenshots.
             return Directory.GetDirectories(ScreenshotDir)

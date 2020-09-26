@@ -169,6 +169,7 @@ namespace Webshot
 
         private void OptionsToolStripMenuItem_Click(object sender, EventArgs e)
         {
+            if (ProjectStore is null) return;
             var form = new OptionsForm(ProjectStore.ProjectDir);
             form.ShowDialog();
         }
