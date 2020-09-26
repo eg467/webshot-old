@@ -116,5 +116,17 @@ namespace Webshot.Properties {
                 this["AutomatedProjects"] = value;
             }
         }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("")]
+        public string PerformanceFilePath {
+            get {
+                return ((string)(this["PerformanceFilePath"]));
+            }
+            set {
+                this["PerformanceFilePath"] = value;
+            }
+        }
     }
 }

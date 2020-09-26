@@ -358,7 +358,7 @@ document.getElementsByTagName('head')[0].appendChild(style);";
 
             try
             {
-                result.RequestStats = await Task.Run(TakeScreenshot);
+                result.RequestTiming = await Task.Run(TakeScreenshot);
                 result.Paths.Add(device, filename);
             }
             catch (Exception ex)

@@ -156,11 +156,50 @@ namespace Webshot
 
     public static class Extensions
     {
+        /// <summary>
+        /// Returns or creates a new collection as the value for a dictionary's key.
+        /// </summary>
+        /// <typeparam name="TKey"></typeparam>
+        /// <typeparam name="TVal"></typeparam>
+        /// <param name="dict"></param>
+        /// <param name="key"></param>
+        /// <returns></returns>
+        public static TVal GetOrInitValue<TKey, TVal>(this Dictionary<TKey, TVal> dict, TKey key) where TVal : new()
+        {
+            return dict.GetOrInitValue(key, () => new TVal());
+        }
+
+        /// <summary>
+        /// Returns or creates a new collection as the value for a dictionary's key.
+        /// </summary>
+        /// <typeparam name="TKey"></typeparam>
+        /// <typeparam name="TVal"></typeparam>
+        ///
+        /// <param name="dict"></param>
+        /// <param name="key"></param>
+        /// <param name="initializer">A function that creates the object</param>
+        /// <returns></returns>
+        public static TVal GetOrInitValue<TKey, TVal>(this Dictionary<TKey, TVal> dict, TKey key, Func<TVal> initializer)
+        {
+            if (!dict.TryGetValue(key, out var existingCol))
+            {
+                existingCol = initializer();
+                dict[key] = existingCol;
+            }
+            return existingCol;
+        }
+
         public static void ForEach<T>(this IEnumerable<T> items, Action<T> fn)
         {
+            items.ForEach((x, _) => fn(x));
+        }
+
+        public static void ForEach<T>(this IEnumerable<T> items, Action<T, int> fn)
+        {
+            int i = 0;
             foreach (var item in items)
             {
-                fn(item);
+                fn(item, i++);
             }
         }
 

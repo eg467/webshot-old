@@ -56,6 +56,8 @@ namespace Webshot
 
         public bool Exists => _filestore.FileExists;
 
+        public string Key => ProjectPath;
+
         /// <summary>
         ///
         /// </summary>

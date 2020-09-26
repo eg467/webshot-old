@@ -81,6 +81,8 @@ namespace Webshot
 
     public interface IProjectStore : IObjectStore<Project>
     {
+        string Key { get; }
+
         event EventHandler<ProjectSavedEventArgs> Saved;
 
         bool Exists { get; }

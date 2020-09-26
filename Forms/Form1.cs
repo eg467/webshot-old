@@ -16,25 +16,6 @@ namespace Webshot
 
     public partial class Form1 : Form
     {
-        //public bool DisableUi
-        //{
-        //    get => this.btnCancelTask.Enabled;
-        //    set
-        //    {
-        //        this.btnCancelTask.Enabled = value;
-        //        this.pnlCrawl.Enabled = !value;
-        //        this.pnlSelectedPages.Enabled = !value;
-        //        this.pnlProjectSelection.Enabled = !value;
-
-        //        if (!value)
-        //        {
-        //            this.progressBar.Value = 0;
-        //            this.progressBar.Maximum = 0;
-        //            this.lblStatus.Text = "";
-        //        }
-        //    }
-        //}
-
         private readonly IProgress<TaskProgress> _progress;
 
         private DebouncedProjectSaver DebouncedProjectSaver =>
@@ -74,6 +55,7 @@ namespace Webshot
 
         private void Form1_Load(object sender, EventArgs e)
         {
+            new StatsPageGenerator().SavePage();
         }
 
         public void HideThenFlashProjectSaved()

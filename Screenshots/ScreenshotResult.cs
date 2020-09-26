@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Newtonsoft.Json;
+using System;
 using System.Collections.Generic;
 
 namespace Webshot
@@ -7,7 +8,7 @@ namespace Webshot
     {
         public Uri Uri { get; set; }
 
-        public NavigationTiming RequestStats { get; set; } = new NavigationTiming();
+        public NavigationTiming RequestTiming { get; set; } = new NavigationTiming();
 
         public Dictionary<Device, string> Paths
         { get; set; } = new Dictionary<Device, string>();
@@ -51,14 +52,43 @@ namespace Webshot
         public int Duration { get; set; }
         public int TransferSize { get; set; }
 
-        public int Ttfb => FromStart(ResponseStart);
+        private TimeSpan Ts(int ms) => TimeSpan.FromMilliseconds(ms);
 
-        public int FromStart(Func<NavigationTiming, int> positionFn) => FromStart(positionFn(this));
+        public int FromFetch(int time) => time - FetchStart;
 
-        public int FromStart(int position) => position - FetchStart;
+        public TimeSpan Ttfb => Ts(FromFetch(ResponseStart));
 
-        public int Difference(Func<NavigationTiming, int> startFn, Func<NavigationTiming, int> endFn) =>
-            endFn(this) - startFn(this);
+        // See https://www.w3.org/TR/2018/WD-navigation-timing-2-20181130/timestamp-diagram.svg
+
+        [JsonIgnore]
+        public TimeSpan Redirect => Ts(RedirectEnd - RedirectStart);
+
+        [JsonIgnore]
+        public TimeSpan AppCache => Ts(DomainLookupStart - FetchStart);
+
+        [JsonIgnore]
+        public TimeSpan Dns => Ts(DomainLookupEnd - DomainLookupStart);
+
+        [JsonIgnore]
+        public TimeSpan Tcp => Ts(ConnectEnd - ConnectStart);
+
+        [JsonIgnore]
+        public TimeSpan Request => Ts(ResponseStart - RequestStart);
+
+        [JsonIgnore]
+        public TimeSpan Response => Ts(ResponseEnd - ResponseStart);
+
+        [JsonIgnore]
+        public TimeSpan Processing => Ts(DomComplete - DomInteractive);
+
+        [JsonIgnore]
+        public TimeSpan Load => Ts(LoadEventEnd - LoadEventStart);
+
+        [JsonIgnore]
+        public TimeSpan BackendResource => Ts(ResponseEnd - RedirectStart);
+
+        [JsonIgnore]
+        public TimeSpan FrontendProcessing => Ts(LoadEventEnd - DomInteractive);
     }
 
     public class ScreenshotResults

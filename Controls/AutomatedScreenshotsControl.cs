@@ -3,11 +3,11 @@ using System.Collections.Generic;
 using System.Data;
 using System.Linq;
 using System.Windows.Forms;
-using System.IO;
 using System.Diagnostics;
 using Webshot.Forms;
 using System.Drawing;
 using Webshot.Store;
+using System.IO;
 
 namespace Webshot.Controls
 {
@@ -19,7 +19,11 @@ namespace Webshot.Controls
             set => _screenshotScheduler.Progress = value;
         }
 
-        private readonly ScreenshotScheduler _screenshotScheduler = new ScreenshotScheduler();
+        private readonly Logger _logger = new Logger(Logger.Default, new FileLogger("scheduler.log"));
+        private readonly ScreenshotScheduler _screenshotScheduler;
+
+        private readonly StatsPageGenerator _statsPageGenerator =
+            new StatsPageGenerator(Properties.Settings.Default.PerformanceFilePath);
 
         private FileProjectStore SelectedStore
         {
@@ -41,7 +45,16 @@ namespace Webshot.Controls
         public AutomatedScreenshotsControl()
         {
             InitializeComponent();
-            _screenshotScheduler.Logger.Logged += Logger_Logged;
+            _logger.Logged += Logger_Logged;
+            _screenshotScheduler = new ScreenshotScheduler(_logger);
+            _screenshotScheduler.SessionCompleted += ScreenshotScheduler_SessionCompleted;
+        }
+
+        private void ScreenshotScheduler_SessionCompleted(object sender, EventArgs e)
+        {
+            _statsPageGenerator.SavePage();
+            var logMsg = $"Performance page saved to: {_statsPageGenerator.FilePath}";
+            _logger.Log(logMsg);
         }
 
         private void Logger_Logged(object sender, LoggerEventArgs e)
@@ -131,17 +144,17 @@ namespace Webshot.Controls
         {
             var diff = date.Subtract(DateTime.Now);
 
-            if (diff.TotalDays > 1d)
+            if (Math.Abs(diff.TotalDays) > 1d)
             {
                 return $"{diff.TotalDays:f2}D";
             }
-            else if (diff.TotalHours > 1d)
+            else if (Math.Abs(diff.TotalHours) > 1d)
             {
                 return $"{diff.TotalHours:f2}H";
             }
             else
             {
-                return $"{diff.Minutes}M";
+                return $"{diff.TotalMinutes:f2}M";
             }
         }
 
@@ -160,6 +173,7 @@ namespace Webshot.Controls
             {
                 var (sched, store) = ((ScheduledProject, FileProjectStore))item.Tag;
                 var nextScheduledRun = NextScheduledTime(sched);
+                item.SubItems[colLastRun.DisplayIndex].Text = GetTimeLabel(sched.LastRun);
                 item.SubItems[colNextRun.DisplayIndex].Text = GetTimeLabel(nextScheduledRun);
             }
         }
@@ -196,6 +210,38 @@ namespace Webshot.Controls
         private void timer1_Tick(object sender, EventArgs e)
         {
             RefreshTimeRemaining();
+        }
+
+        private void btnScheduleImmediately_Click(object sender, EventArgs e)
+        {
+            var selectedIndices = this.lvScheduledProjects.SelectedIndices;
+            var selectedIndex = selectedIndices.Cast<int>().FirstOrDefault();
+            _screenshotScheduler.ScheduleImmediateRun(SelectedStore.ProjectPath);
+            LoadProjects();
+            this.lvScheduledProjects.Items[selectedIndex].Selected = true;
+        }
+
+        private void btnChoosePerformanceStatsPath_Click(object sender, EventArgs e)
+        {
+            UpdatePerformancePagePath();
+        }
+
+        private void UpdatePerformancePagePath()
+        {
+            var current = Properties.Settings.Default.PerformanceFilePath;
+            if (!string.IsNullOrEmpty(current))
+            {
+                var dir = Path.GetDirectoryName(current);
+                this.savePerformanceFileDialog1.InitialDirectory = dir;
+            }
+
+            if (DialogResult.OK != this.savePerformanceFileDialog1.ShowDialog()) return;
+
+            var path = this.savePerformanceFileDialog1.FileName;
+            Properties.Settings.Default.PerformanceFilePath = path;
+            Properties.Settings.Default.Save();
+            _statsPageGenerator.FilePath = path;
+            this.btnChoosePerformanceStatsPath.Text = $"Performance page path: {path}";
         }
     }
 }

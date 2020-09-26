@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -10,6 +11,8 @@ namespace Webshot
 {
     internal class ScreenshotScheduler : IDisposable
     {
+        public event EventHandler SessionCompleted;
+
         public Logger Logger { get; }
 
         public string ConfigPath => _schedulerStore.SchedulerFile;
@@ -62,9 +65,9 @@ namespace Webshot
                 Interval = 5000,
             };
 
-        public ScreenshotScheduler()
+        public ScreenshotScheduler(Logger logger = null)
         {
-            Logger = new Logger(Logger.Default, new FileLogger("scheduler.log"));
+            Logger = logger ?? new Logger(Logger.Default, new FileLogger("scheduler.log"));
 
             RefreshSettings();
             _timer.Tick += Timer_Tick;
@@ -73,6 +76,14 @@ namespace Webshot
         public void RefreshSettings()
         {
             _settings = _schedulerStore.Load();
+        }
+
+        public void ScheduleImmediateRun(string id)
+        {
+            _settings.ScheduledProjects
+                .Where(p => p.ProjectId == id)
+                .ForEach(p => p.RunImmediately = true);
+            _schedulerStore.Save(_settings);
         }
 
         private ScheduledProject NextScheduledProject()
@@ -91,7 +102,7 @@ namespace Webshot
         private async void Timer_Tick(object sender, EventArgs e)
         {
             if (IsBusy) return;
-
+            var sw = Stopwatch.StartNew();
             ScheduledProject nextScheduledProject = NextScheduledProject();
 
             if (nextScheduledProject is null) return;
@@ -103,6 +114,8 @@ namespace Webshot
             nextScheduledProject.LastRun = DateTime.Now;
             nextScheduledProject.RunImmediately = false;
             _schedulerStore.Save(_settings);
+            SessionCompleted?.Invoke(this, EventArgs.Empty);
+            Logger.Log($"Project completed successfully in {sw.ElapsedMilliseconds}ms, {nextScheduledProject.ProjectId}");
         }
 
         private async Task<bool> TryTakeScreenshotsAsync(

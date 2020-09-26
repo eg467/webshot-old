@@ -7,7 +7,8 @@
         /// </summary>
         private System.ComponentModel.IContainer components = null;
 
-        /// <summary> 
+
+        /// <summary>
         /// Clean up any resources being used.
         /// </summary>
         /// <param name="disposing">true if managed resources should be disposed; otherwise, false.</param>
@@ -15,11 +16,12 @@
         {
             if (disposing && (components != null))
             {
+                _logger.Logged -= Logger_Logged;
+                _screenshotScheduler.SessionCompleted -= ScreenshotScheduler_SessionCompleted;
                 components.Dispose();
             }
             base.Dispose(disposing);
         }
-
         #region Component Designer generated code
 
         /// <summary> 
@@ -34,16 +36,19 @@
             this.colName = ((System.Windows.Forms.ColumnHeader)(new System.Windows.Forms.ColumnHeader()));
             this.colDomains = ((System.Windows.Forms.ColumnHeader)(new System.Windows.Forms.ColumnHeader()));
             this.colPath = ((System.Windows.Forms.ColumnHeader)(new System.Windows.Forms.ColumnHeader()));
+            this.colLastRun = ((System.Windows.Forms.ColumnHeader)(new System.Windows.Forms.ColumnHeader()));
+            this.colInterval = ((System.Windows.Forms.ColumnHeader)(new System.Windows.Forms.ColumnHeader()));
+            this.colNextRun = ((System.Windows.Forms.ColumnHeader)(new System.Windows.Forms.ColumnHeader()));
             this.btnOpenProjectFolder = new System.Windows.Forms.Button();
             this.pnlProjectOptions = new System.Windows.Forms.GroupBox();
             this.btnProjectOptions = new System.Windows.Forms.Button();
             this.txtLog = new System.Windows.Forms.RichTextBox();
             this.lnkRefresh = new System.Windows.Forms.LinkLabel();
             this.lnkOpenSchedulerFile = new System.Windows.Forms.LinkLabel();
-            this.colLastRun = ((System.Windows.Forms.ColumnHeader)(new System.Windows.Forms.ColumnHeader()));
-            this.colInterval = ((System.Windows.Forms.ColumnHeader)(new System.Windows.Forms.ColumnHeader()));
-            this.colNextRun = ((System.Windows.Forms.ColumnHeader)(new System.Windows.Forms.ColumnHeader()));
             this.timer1 = new System.Windows.Forms.Timer(this.components);
+            this.btnScheduleImmediately = new System.Windows.Forms.Button();
+            this.savePerformanceFileDialog1 = new System.Windows.Forms.SaveFileDialog();
+            this.btnChoosePerformanceStatsPath = new System.Windows.Forms.Button();
             this.pnlProjectOptions.SuspendLayout();
             this.SuspendLayout();
             // 
@@ -92,11 +97,23 @@
             this.colPath.Text = "Path";
             this.colPath.Width = 330;
             // 
+            // colLastRun
+            // 
+            this.colLastRun.Text = "Last Run";
+            // 
+            // colInterval
+            // 
+            this.colInterval.Text = "Interval (min)";
+            // 
+            // colNextRun
+            // 
+            this.colNextRun.Text = "Scheduled For";
+            // 
             // btnOpenProjectFolder
             // 
             this.btnOpenProjectFolder.Location = new System.Drawing.Point(6, 41);
             this.btnOpenProjectFolder.Name = "btnOpenProjectFolder";
-            this.btnOpenProjectFolder.Size = new System.Drawing.Size(1112, 59);
+            this.btnOpenProjectFolder.Size = new System.Drawing.Size(738, 59);
             this.btnOpenProjectFolder.TabIndex = 4;
             this.btnOpenProjectFolder.Text = "Open Folder";
             this.btnOpenProjectFolder.UseVisualStyleBackColor = true;
@@ -104,6 +121,7 @@
             // 
             // pnlProjectOptions
             // 
+            this.pnlProjectOptions.Controls.Add(this.btnScheduleImmediately);
             this.pnlProjectOptions.Controls.Add(this.btnProjectOptions);
             this.pnlProjectOptions.Controls.Add(this.btnOpenProjectFolder);
             this.pnlProjectOptions.Enabled = false;
@@ -118,7 +136,7 @@
             // 
             this.btnProjectOptions.Location = new System.Drawing.Point(6, 106);
             this.btnProjectOptions.Name = "btnProjectOptions";
-            this.btnProjectOptions.Size = new System.Drawing.Size(1112, 44);
+            this.btnProjectOptions.Size = new System.Drawing.Size(738, 44);
             this.btnProjectOptions.TabIndex = 5;
             this.btnProjectOptions.Text = "Options";
             this.btnProjectOptions.UseVisualStyleBackColor = true;
@@ -126,9 +144,9 @@
             // 
             // txtLog
             // 
-            this.txtLog.Location = new System.Drawing.Point(9, 612);
+            this.txtLog.Location = new System.Drawing.Point(9, 662);
             this.txtLog.Name = "txtLog";
-            this.txtLog.Size = new System.Drawing.Size(1109, 460);
+            this.txtLog.Size = new System.Drawing.Size(1109, 410);
             this.txtLog.TabIndex = 6;
             this.txtLog.Text = "";
             // 
@@ -154,28 +172,42 @@
             this.lnkOpenSchedulerFile.Text = "Open Scheduler File";
             this.lnkOpenSchedulerFile.LinkClicked += new System.Windows.Forms.LinkLabelLinkClickedEventHandler(this.lnkOpenSchedulerFile_LinkClicked);
             // 
-            // colLastRun
-            // 
-            this.colLastRun.Text = "Last Run";
-            // 
-            // colInterval
-            // 
-            this.colInterval.Text = "Interval (min)";
-            // 
-            // colNextRun
-            // 
-            this.colNextRun.Text = "Scheduled For";
-            // 
             // timer1
             // 
             this.timer1.Enabled = true;
             this.timer1.Interval = 5000;
             this.timer1.Tick += new System.EventHandler(this.timer1_Tick);
             // 
+            // btnScheduleImmediately
+            // 
+            this.btnScheduleImmediately.Location = new System.Drawing.Point(774, 41);
+            this.btnScheduleImmediately.Name = "btnScheduleImmediately";
+            this.btnScheduleImmediately.Size = new System.Drawing.Size(303, 59);
+            this.btnScheduleImmediately.TabIndex = 6;
+            this.btnScheduleImmediately.Text = "Schedule to Run Immediately";
+            this.btnScheduleImmediately.UseVisualStyleBackColor = true;
+            this.btnScheduleImmediately.Click += new System.EventHandler(this.btnScheduleImmediately_Click);
+            // 
+            // savePerformanceFileDialog1
+            // 
+            this.savePerformanceFileDialog1.DefaultExt = "html";
+            this.savePerformanceFileDialog1.Filter = "Web Page|*.html";
+            // 
+            // btnChoosePerformanceStatsPath
+            // 
+            this.btnChoosePerformanceStatsPath.Location = new System.Drawing.Point(9, 609);
+            this.btnChoosePerformanceStatsPath.Name = "btnChoosePerformanceStatsPath";
+            this.btnChoosePerformanceStatsPath.Size = new System.Drawing.Size(1109, 47);
+            this.btnChoosePerformanceStatsPath.TabIndex = 9;
+            this.btnChoosePerformanceStatsPath.Text = "Performance Webpage Path";
+            this.btnChoosePerformanceStatsPath.UseVisualStyleBackColor = true;
+            this.btnChoosePerformanceStatsPath.Click += new System.EventHandler(this.btnChoosePerformanceStatsPath_Click);
+            // 
             // AutomatedScreenshotsControl
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(11F, 24F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
+            this.Controls.Add(this.btnChoosePerformanceStatsPath);
             this.Controls.Add(this.lnkOpenSchedulerFile);
             this.Controls.Add(this.lnkRefresh);
             this.Controls.Add(this.txtLog);
@@ -207,5 +239,8 @@
         private System.Windows.Forms.ColumnHeader colInterval;
         private System.Windows.Forms.ColumnHeader colNextRun;
         private System.Windows.Forms.Timer timer1;
+        private System.Windows.Forms.Button btnScheduleImmediately;
+        private System.Windows.Forms.SaveFileDialog savePerformanceFileDialog1;
+        private System.Windows.Forms.Button btnChoosePerformanceStatsPath;
     }
 }
