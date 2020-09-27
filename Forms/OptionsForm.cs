@@ -110,6 +110,7 @@ namespace Webshot.Forms
                         {
                             throw new ArgumentException(nameof(CredentialsUi));
                         }
+
                         var siteCreds = new AuthCredentials(c[1], c[2]);
                         projectCreds.CredentialsByDomain.Add(c[0], siteCreds);
                     });
@@ -121,7 +122,7 @@ namespace Webshot.Forms
                     value?.CredentialsByDomain
                     ?? new Dictionary<string, AuthCredentials>();
 
-                var lines = creds.Select(c => $"{c.Key}:{c.Value.User}:{c.Value.Password}");
+                var lines = creds.Select(c => $"{c.Key}:{c.Value.DecryptUser()}:{c.Value.DecryptPassword()}");
                 this.txtCreds.Text = string.Join(Environment.NewLine, lines);
             }
         }

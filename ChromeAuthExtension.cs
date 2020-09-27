@@ -74,8 +74,8 @@ if(details.challenger
     && details.challenger.host.toUpperCase() === '{EscapeSingleQuote(x.Key.ToUpper())}') {{
     return {{
         'authCredentials':{{
-            username:'{EscapeSingleQuote(x.Value.User)}',
-            password:'{EscapeSingleQuote(x.Value.Password)}'
+            username:'{EscapeSingleQuote(x.Value.DecryptUser())}',
+            password:'{EscapeSingleQuote(x.Value.DecryptPassword())}'
         }}
     }};
 }} ");

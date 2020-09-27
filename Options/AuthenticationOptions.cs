@@ -17,10 +17,19 @@ namespace Webshot
         {
         }
 
+        public string DecryptUser() => string.IsNullOrEmpty(User) ? null : Encryption.Unprotect(User);
+
+        public string DecryptPassword() => string.IsNullOrEmpty(Password) ? null : Encryption.Unprotect(Password);
+
+        /// <summary>
+        /// Stores encrypted credentials for web authentication.
+        /// </summary>
+        /// <param name="user"></param>
+        /// <param name="password"></param>
         public AuthCredentials(string user, string password)
         {
-            this.User = user;
-            this.Password = password;
+            this.User = Encryption.Protect(user);
+            this.Password = Encryption.Protect(password);
         }
     }
 }

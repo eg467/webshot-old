@@ -72,7 +72,7 @@ namespace Webshot
             {
                 var domainUrl = c.Key.Contains("://") ? c.Key : $"https://{c.Key}";
                 var uri = new Uri(domainUrl);
-                var creds = new NetworkCredential(c.Value.User, c.Value.Password);
+                var creds = new NetworkCredential(c.Value.DecryptUser(), c.Value.DecryptPassword());
 
                 WebshotHttpClient.AddCredential(uri, creds);
                 //_credentialCache.Add(uri, "Basic", creds);

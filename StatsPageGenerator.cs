@@ -101,7 +101,19 @@ namespace Webshot
             string template = File.ReadAllText("StatPageHtmlTemplate.html");
             string finalHtml = template.Replace("/***allData***/", $@"let allData=({serializedStats});");
 
-            File.WriteAllText(FilePath, finalHtml);
+            // Save to a dummy file first, because people viewing the html file can cause access IO errors.
+            var safePath = $"{FilePath}.DONOTOPEN";
+            File.WriteAllText(safePath, finalHtml, Encoding.UTF8);
+
+            // Now write to a viewable path/extension that can fail.
+            try
+            {
+                File.WriteAllText(FilePath, finalHtml, Encoding.UTF8);
+            }
+            catch (Exception ex)
+            {
+                Logger.Default.Log($"Could not copy performance HTML file because: {ex.Message}", LogEntryType.Error);
+            }
         }
     }
 
