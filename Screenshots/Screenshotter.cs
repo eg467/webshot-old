@@ -59,13 +59,14 @@ namespace Webshot
             {
                 File.Delete(AuthExtensionPath);
             }
-            _driver.Close();
+            _driver.Quit();
             _driver.Dispose();
         }
 
         private ChromeDriver CreateDriver()
         {
             var options = new ChromeOptions();
+            options.AddArgument("--incognito");
             CreateAuthExtensionIfNeeded(options);
             var driver = new ChromeDriver(options);
             return driver;
@@ -119,11 +120,11 @@ namespace Webshot
                 HighlightBrokenLinks(url);
             }
 
-            var requestStats = GetRequestStats();
-
-            int screenshotDelay = 1000;
+            // Sometimes, when this isn't high enough, the performance timings return incomplete data.
+            int screenshotDelay = 3000;
             Thread.Sleep(screenshotDelay);
 
+            var requestStats = GetRequestStats();
             var screenshot = _driver.GetScreenshot();
             screenshot.SaveAsFile(filePath, _imageFormat);
             ClearResize();
@@ -133,11 +134,16 @@ namespace Webshot
 
             NavigationTiming GetRequestStats()
             {
-                //JSON.stringify([...window.performance.getEntriesByType("navigation"),{ }][0])
                 try
                 {
                     var stats = (string)_driver.ExecuteScript(
                         @"return (window && window.performance && JSON.stringify([...window.performance.getEntriesByType('navigation'),{ }][0])) || '{}'");
+                    var deprecatedTiming = (string)_driver.ExecuteScript(
+                        @"return (window && window.performance && window.performance.timing && JSON.stringify(window.performance.timing)) || '{}'");
+
+                    Logger.Default.Log($"Stats for {url}...");
+                    Logger.Default.Log(stats);
+                    Logger.Default.Log(deprecatedTiming);
 
                     string ConvertToInt(Match m)
                     {
@@ -148,6 +154,7 @@ namespace Webshot
                     }
 
                     stats = Regex.Replace(stats, @"\d+\.\d+", ConvertToInt);
+                    Logger.Default.Log("stats converted to int: " + stats);
 
                     return JsonConvert.DeserializeObject<NavigationTiming>((string)stats);
                 }
@@ -220,7 +227,18 @@ namespace Webshot
 
             void ClearResize()
             {
-                _driver.ExecuteChromeCommand("Emulation.clearDeviceMetricsOverride", new Dictionary<string, object>());
+                try
+                {
+                    _driver.ExecuteChromeCommand("Emulation.clearDeviceMetricsOverride", new Dictionary<string, object>());
+                }
+                catch (Exception ex)
+                {
+                    // Usually thrown when the driver or browser window is closed.
+                    if (!(ex is WebDriverException || ex is NoSuchWindowException))
+                    {
+                        throw;
+                    }
+                }
             }
 
             void HighlightBrokenLinks(string rawCallingUri)

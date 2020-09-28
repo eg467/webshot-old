@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Data;
+using System.IO;
 using System.Linq;
 using System.Windows.Forms;
 using Webshot.Store;
@@ -22,6 +23,10 @@ namespace Webshot.Forms
 
         public void SetProject(string projectPath)
         {
+            if (!File.Exists(projectPath))
+            {
+                throw new FileNotFoundException("Project file doesn't exist.", projectPath);
+            }
             _projectPath = projectPath;
             IProjectStore store = _projectStoreFactory.Create(_projectPath);
             _project = store.Load();
@@ -235,8 +240,18 @@ namespace Webshot.Forms
         private void SaveSchedulerUiToSettings()
         {
             var store = new SchedulerStore();
-            var settings = store.Load();
+            SchedulerSettings settings = store.Load();
             var scheduled = GetScheduledProject(settings);
+
+            if (!this.cbScheduled.Checked)
+            {
+                if (scheduled is object)
+                {
+                    settings.ScheduledProjects.Remove(scheduled);
+                    store.Save(settings);
+                }
+                return;
+            }
 
             if (scheduled is null)
             {
@@ -244,8 +259,9 @@ namespace Webshot.Forms
                 settings.ScheduledProjects.Add(scheduled);
             }
 
-            scheduled.Enabled = this.cbScheduled.Checked;
-            scheduled.Interval = TimeSpan.FromMinutes((double)this.numScheduleInterval.Value);
+            scheduled.Enabled = true;
+            decimal interval = this.numScheduleInterval.Value;
+            scheduled.Interval = TimeSpan.FromMinutes((double)interval);
             scheduled.ProjectId = _projectPath;
             scheduled.RunImmediately = scheduled?.RunImmediately ?? false;
             scheduled.LastRun = scheduled?.LastRun;

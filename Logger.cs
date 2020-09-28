@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 
 namespace Webshot
@@ -29,12 +30,23 @@ namespace Webshot
         public virtual LogEntryType TypeFilter { get; set; } =
             LogEntryType.Log | LogEntryType.Warning | LogEntryType.Error;
 
-        public void Log(string message, LogEntryType type = LogEntryType.Log)
+        /// <summary>
+        ///
+        /// </summary>
+        /// <param name="message"></param>
+        /// <param name="type"></param>
+        /// <param name="lineNo">Ignore, used by compiler services.</param>
+        /// <param name="memberName">Ignore, used by compiler services.</param>
+        /// <param name="filePath">Ignore, used by compiler services.</param>
+        public void Log(
+            string message,
+            LogEntryType type = LogEntryType.Log)
         {
             Log(new LogEntry(message, type));
         }
 
-        public void Log(LogEntry entry)
+        public void Log(
+            LogEntry entry)
         {
             if (!TypeFilter.HasFlag(entry.Type)) return;
 
@@ -90,6 +102,57 @@ namespace Webshot
         }
 
         public LogEntry()
+        {
+        }
+    }
+
+    public class DiagnosticLogEntry : LogEntry
+    {
+        public int CallingLineNo { get; set; }
+        public string CallingMemberName { get; set; }
+        public string CallingFilePath { get; set; }
+
+        public override string ToString() => $"[{Timestamp}][{Type}][{CallingFilePath}:{CallingLineNo} ({CallingMemberName})]: {RawMessage}";
+
+        public DiagnosticLogEntry(
+            string rawMessage,
+            LogEntryType type = LogEntryType.Error,
+            [CallerLineNumber] int lineNo = 0,
+            [CallerMemberName] string memberName = null,
+            [CallerFilePath] string filePath = null)
+            : base(rawMessage, type)
+        {
+            CallingLineNo = lineNo;
+            CallingMemberName = memberName;
+            CallingFilePath = filePath;
+        }
+
+        public DiagnosticLogEntry(
+            LogEntry entry,
+            [CallerLineNumber] int lineNo = 0,
+            [CallerMemberName] string memberName = null,
+            [CallerFilePath] string filePath = null)
+            : base(entry.RawMessage, entry.Type)
+        {
+            Timestamp = entry.Timestamp;
+            CallingLineNo = lineNo;
+            CallingMemberName = memberName;
+            CallingFilePath = filePath;
+        }
+
+        public DiagnosticLogEntry(
+            Exception ex,
+            [CallerLineNumber] int lineNo = 0,
+            [CallerMemberName] string memberName = null,
+            [CallerFilePath] string filePath = null)
+            : base(ex.ToString(), LogEntryType.Error)
+        {
+            CallingLineNo = lineNo;
+            CallingMemberName = memberName;
+            CallingFilePath = filePath;
+        }
+
+        public DiagnosticLogEntry()
         {
         }
     }

@@ -15,14 +15,14 @@ namespace Webshot
 
         public Logger Logger { get; }
 
-        public string ConfigPath => _schedulerStore.SchedulerFile;
+        public string ConfigPath => this._schedulerStore.SchedulerFile;
 
         public List<FileProjectStore> GetScheduledProjectStores()
         {
             RefreshSettings();
-            return _settings is object
-                ? _settings.ScheduledProjects
-                    .Select(p => _projectStoreFactory.Create(p.ProjectId))
+            return this._settings is object
+                ? this._settings.ScheduledProjects
+                    .Select(p => this._projectStoreFactory.Create(p.ProjectId))
                     .Where(p => p.Exists)
                     .Cast<FileProjectStore>()
                     .ToList()
@@ -32,11 +32,11 @@ namespace Webshot
         public List<(ScheduledProject scheduledProject, FileProjectStore store)> GetScheduledProjects()
         {
             RefreshSettings();
-            var scheduledProjects = _settings?.ScheduledProjects ?? new List<ScheduledProject>();
+            var scheduledProjects = this._settings?.ScheduledProjects ?? new List<ScheduledProject>();
             return scheduledProjects
                     .Select(p =>
                         (p,
-                        store: (FileProjectStore)_projectStoreFactory.Create(p.ProjectId)))
+                        store: (FileProjectStore)this._projectStoreFactory.Create(p.ProjectId)))
                     .Where(p => p.store.Exists)
                     .ToList();
         }
@@ -49,12 +49,20 @@ namespace Webshot
 
         public IProgress<TaskProgress> Progress { get; set; }
 
-        public bool IsBusy => _cancellableTask.Busy;
+        public bool IsBusy => this._cancellableTask.Busy;
 
+        // Stops any future projects from running and cancels any currently running ones.
         public bool Enabled
         {
-            get => _timer.Enabled;
-            set => _timer.Enabled = value;
+            get => this._timer.Enabled;
+            set
+            {
+                if (!value)
+                {
+                    this._cancellableTask?.Cancel();
+                }
+                this._timer.Enabled = value;
+            }
         }
 
         private readonly CancellableTask _cancellableTask = new CancellableTask();
@@ -67,55 +75,66 @@ namespace Webshot
 
         public ScreenshotScheduler(Logger logger = null)
         {
-            Logger = logger ?? new Logger(Logger.Default, new FileLogger("scheduler.log"));
+            this.Logger = logger ?? new Logger(Logger.Default, new FileLogger("scheduler.log"));
 
             RefreshSettings();
-            _timer.Tick += Timer_Tick;
+            this._timer.Tick += Timer_Tick;
         }
 
         public void RefreshSettings()
         {
-            _settings = _schedulerStore.Load();
+            this._settings = this._schedulerStore.Load();
         }
 
         public void ScheduleImmediateRun(string id)
         {
-            _settings.ScheduledProjects
+            this._settings.ScheduledProjects
                 .Where(p => p.ProjectId == id)
                 .ForEach(p => p.RunImmediately = true);
-            _schedulerStore.Save(_settings);
+            this._schedulerStore.Save(this._settings);
         }
 
         private ScheduledProject NextScheduledProject()
         {
-            bool IsScheduled(ScheduledProject p) =>
-                p.Enabled
-                && (
-                    !p.LastRun.HasValue
-                    || p.LastRun.Value.Add(p.Interval) < DateTime.Now
-                );
+            bool IsScheduled(ScheduledProject p)
+            {
+                return p.Enabled
+&& (
+!p.LastRun.HasValue
+|| p.LastRun.Value.Add(p.Interval) < DateTime.Now
+);
+            }
 
-            return _settings.ScheduledProjects.FirstOrDefault(p => p.RunImmediately)
-                ?? _settings.ScheduledProjects.FirstOrDefault(IsScheduled);
+            return this._settings.ScheduledProjects.FirstOrDefault(p => p.RunImmediately)
+                ?? this._settings.ScheduledProjects.FirstOrDefault(IsScheduled);
         }
 
         private async void Timer_Tick(object sender, EventArgs e)
         {
-            if (IsBusy) return;
-            var sw = Stopwatch.StartNew();
-            ScheduledProject nextScheduledProject = NextScheduledProject();
+            if (this.IsBusy)
+            {
+                return;
+            }
 
-            if (nextScheduledProject is null) return;
+            Stopwatch sw = Stopwatch.StartNew();
+            var nextScheduledProject = NextScheduledProject();
 
-            async Task TakeScreenshots(CancellationToken token) =>
+            if (nextScheduledProject is null)
+            {
+                return;
+            }
+
+            async Task TakeScreenshots(CancellationToken token)
+            {
                 await TryTakeScreenshotsAsync(nextScheduledProject, token);
+            }
 
-            await _cancellableTask.PerformAsync(TakeScreenshots);
+            await this._cancellableTask.PerformAsync(TakeScreenshots);
             nextScheduledProject.LastRun = DateTime.Now;
             nextScheduledProject.RunImmediately = false;
-            _schedulerStore.Save(_settings);
+            this._schedulerStore.Save(this._settings);
             SessionCompleted?.Invoke(this, EventArgs.Empty);
-            Logger.Log($"Project completed successfully in {sw.ElapsedMilliseconds}ms, {nextScheduledProject.ProjectId}");
+            this.Logger.Log($"Project completed successfully in {sw.ElapsedMilliseconds}ms, {nextScheduledProject.ProjectId}");
         }
 
         private async Task<bool> TryTakeScreenshotsAsync(
@@ -125,31 +144,35 @@ namespace Webshot
             try
             {
                 string projectId = scheduledProject.ProjectId;
-                IProjectStore nextProjectStore = _projectStoreFactory.Create(projectId);
-                Project project = nextProjectStore.Load();
-                var screenshotter = new DeviceScreenshotter(project);
-                await screenshotter.TakeScreenshotsAsync(token, Progress);
+                var nextProjectStore = this._projectStoreFactory.Create(projectId);
+                var project = nextProjectStore.Load();
+                DeviceScreenshotter screenshotter = new DeviceScreenshotter(project);
+                await screenshotter.TakeScreenshotsAsync(token, this.Progress);
                 return true;
             }
             catch (TaskCanceledException)
             {
-                Logger.Log("Scheduled screenshotting cancelled.", LogEntryType.Warning);
+                this.Logger.Log("Scheduled screenshotting cancelled.", LogEntryType.Warning);
             }
             catch (Exception ex)
             {
-                Logger.Log("Error completing scheduled screenshotting: " + ex.Message, LogEntryType.Error);
+                this.Logger.Log(new DiagnosticLogEntry(ex));
             }
             return false;
         }
 
-        private IEnumerable<string> GetScheduledProjectPaths() =>
-            Properties.Settings.Default?.AutomatedProjects?.Cast<string>()
-            ?? Enumerable.Empty<string>();
+        private IEnumerable<string> GetScheduledProjectPaths()
+        {
+            return Properties.Settings.Default?.AutomatedProjects?.Cast<string>()
+?? Enumerable.Empty<string>();
+        }
 
-        private List<Project> LoadProjects(IEnumerable<string> paths) =>
-            paths.Where(File.Exists)
-                .Select(LoadProject)
-                .ToList();
+        private List<Project> LoadProjects(IEnumerable<string> paths)
+        {
+            return paths.Where(File.Exists)
+.Select(LoadProject)
+.ToList();
+        }
 
         private Project LoadProject(string path)
         {
@@ -158,13 +181,13 @@ namespace Webshot
                 throw new FileNotFoundException("The project file wasn't found.", path);
             }
 
-            var store = new FileProjectStore(path);
+            FileProjectStore store = new FileProjectStore(path);
             return store.Load();
         }
 
         public void Dispose()
         {
-            _cancellableTask?.Dispose();
+            this._cancellableTask?.Dispose();
         }
     }
 }

@@ -200,7 +200,6 @@ namespace Webshot.Controls
             Project.Save();
 
             SiteUrisUi = Project.Input.SiteUris;
-
         }
 
         /// <summary>

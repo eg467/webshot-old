@@ -85,8 +85,37 @@ namespace Webshot.Controls
 
         private void btnStartStop_Click(object sender, EventArgs e)
         {
+            if (!CheckScheduledProjectsForMultipleDevices()) return;
             _screenshotScheduler.Enabled = !_screenshotScheduler.Enabled;
             this.btnStartStop.Text = _screenshotScheduler.Enabled ? "Stop" : "Start";
+        }
+
+        /// <summary>
+        /// Automation is usually to test performance and uptime and to find glaring issues.
+        /// Checking multiple devices will waste time.
+        /// </summary>
+        /// <returns>True to continue, false to abort.</returns>
+        private bool CheckScheduledProjectsForMultipleDevices()
+        {
+            bool TestsMultipleDevices(Project p) =>
+                p.Options.ScreenshotOptions.DeviceOptions.Count(o => o.Value.Enabled) > 1;
+
+            List<Project> projectsTestingMultipleDevices =
+                _screenshotScheduler.GetScheduledProjectStores()
+                    .Select(s => s.Load())
+                    .Where(TestsMultipleDevices)
+                    .ToList();
+
+            if (!projectsTestingMultipleDevices.Any()) return true;
+
+            var offendingProjects = projectsTestingMultipleDevices.Select(p => $"{p.Name}\r\n{p.Store.Key}");
+            var offendingProjectLabel = string.Join("\r\n--------\r\n", offendingProjects);
+            var labelPrompt =
+                "The projects below test multiple device sizes. " +
+                "This may be a waste of time. Would you like to continue anyway?" +
+                $"\r\n\r\nProjects:\r\n {offendingProjectLabel}";
+
+            return DialogResult.Yes == MessageBox.Show(labelPrompt, "Continue?", MessageBoxButtons.YesNo);
         }
 
         private void lvScheduledProjects_SelectedIndexChanged(object sender, EventArgs e)
